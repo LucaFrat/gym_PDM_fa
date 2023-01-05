@@ -5,21 +5,17 @@ Path tracking simulation with iterative linear model predictive control for spee
 author: Atsushi Sakai (@Atsushi_twi)
 
 """
-import matplotlib.pyplot as plt
-import cvxpy
 import math
-import numpy as np
-import sys
 import pathlib
-sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
+import sys
+
+import cvxpy
+import matplotlib.pyplot as plt
+import numpy as np
+
 import cubic_spline_planner
 
-"""
-Look at:
-def update_state(state, a, delta):
-def (iterative_)linear_mpc_control(xref, xbar, x0, dref)
-Rd, Qf
-"""
+sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
@@ -30,33 +26,24 @@ R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 1.0  # max simulation time
 
 # iterative paramter
 MAX_ITER = 3  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
 DT = 0.2  # [s] time tick
 
 # Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.5  # [m]
+WB = 2.7  # [m]
 
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
+MAX_STEER = 0.6478  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
+MAX_SPEED = 38  # maximum speed [m/s]
+MIN_SPEED = -3  # minimum speed [m/s]
 MAX_ACCEL = 1.0  # maximum accel [m/ss]
+TARGET_SPEED = 20  # target speed [m/s]
 
 
 class State:
@@ -105,8 +92,6 @@ def get_linear_model_matrix(v, phi, delta):
     C[3] = - DT * v * delta / (WB * math.cos(delta) ** 2)
 
     return A, B, C
-
-
 
 
 def update_state(state, a, delta):
@@ -186,15 +171,15 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
         oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref)
-        print(f"iter {i} = oa: {oa}, od: {od}")
+        # print(f"iter {i} = oa: {oa}, od: {od}")
 
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
-    #else:
+    # else:
     #    print("Iterative is max iter")
 
-    return oa, od #, ox, oy, oyaw, ov
+    return oa, od  # , ox, oy, oyaw, ov
 
 
 def linear_mpc_control(xref, xbar, x0, dref):
@@ -293,91 +278,6 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     return xref, ind, dref
 
 
-def check_goal(state, goal, tind, nind):
-
-    # check goal
-    dx = state.x - goal[0]
-    dy = state.y - goal[1]
-    d = math.hypot(dx, dy)
-
-    isgoal = (d <= GOAL_DIS)
-
-    if abs(tind - nind) >= 5:
-        isgoal = False
-
-    isstop = (abs(state.v) <= STOP_SPEED)
-
-    if isgoal and isstop:
-        return True
-
-    return False
-
-
-def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
-    """
-    Simulation
-
-    cx: course x position list
-    cy: course y position list
-    cy: course yaw position list
-    ck: course curvature list
-    sp: speed profile
-    dl: course tick [m]
-
-    """
-
-    goal = [cx[-1], cy[-1]]
-
-    state = initial_state
-
-    # initial yaw compensation
-    if state.yaw - cyaw[0] >= math.pi:
-        state.yaw -= math.pi * 2.0
-    elif state.yaw - cyaw[0] <= -math.pi:
-        state.yaw += math.pi * 2.0
-
-    time = 0.0
-    x = [state.x]
-    y = [state.y]
-    yaw = [state.yaw]
-    v = [state.v]
-    t = [0.0]
-    d = [0.0]
-    a = [0.0]
-    target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
-
-    odelta, oa = None, None
-
-    cyaw = smooth_yaw(cyaw)
-
-    while MAX_TIME >= time:
-        xref, target_ind, dref = calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, target_ind)
-
-        x0 = [state.x, state.y, state.v, state.yaw]  # current state
-
-        oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
-
-        if odelta is not None:
-            di, ai = odelta[0], oa[0]
-               
-        state = update_state(state, ai, di)
-        time = time + DT
-
-        x.append(state.x)
-        y.append(state.y)
-        yaw.append(state.yaw)
-        v.append(state.v)
-        t.append(time)
-        d.append(di)
-        a.append(ai)
-
-        if check_goal(state, goal, target_ind, len(cx)):
-            print("Goal")
-            break
-
-    return t, x, y, yaw, v, d, a
-
-
 def calc_speed_profile(cx, cy, cyaw, target_speed):
 
     speed_profile = [target_speed] * len(cx)
@@ -423,26 +323,10 @@ def smooth_yaw(yaw):
     return yaw
 
 
-
 def get_forward_course(dl):
-    ax = [0.0, 3.0, 8.0] #, 2.0, 3.0, 1.0, -0.5]
-    ay = [0.0, 6.0, 16.0] #, 4.0, .0, 2.0, -1.0]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
+    ax = [0.0, 5.0]
+    ay = [0.0, 5.0]
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
 
     return cx, cy, cyaw, ck
-
-
-
-def our_mpc():
-    print(__file__ + " start!!")
-
-    dl = 1.0  # course tick
-    cx, cy, cyaw, ck = get_forward_course(dl)
-
-    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
-
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
-
-    t, x, y, yaw, v, d, a = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state)
-    
-    return a, d
