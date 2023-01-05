@@ -201,7 +201,7 @@ class GenericRobot(ABC):
     def apply_action(self, action, dt=None) -> None:
         if self._mode == ControlMode.torque:
             self.apply_torque_action(action)
-        elif self._mode == ControlMode.velocity:
+        elif self._mode == ControlMode.velocity: # <-------------------
             self.apply_velocity_action(action)
         elif self._mode == ControlMode.acceleration:
             self.apply_acceleration_action(action, dt)
