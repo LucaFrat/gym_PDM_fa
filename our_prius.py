@@ -1,10 +1,14 @@
 import math
 
 import gym
+import matplotlib.pyplot as plt
 import numpy as np
 
 import our_MPC
 from urdfenvs.robots.prius import Prius
+
+N_STEPS = 30
+RENDER = False
 
 
 class State:
@@ -20,7 +24,7 @@ class State:
         self.predelta = None
 
 
-def run_prius(n_steps=100, render=False, goal=True, obstacles=True):
+def run_prius(n_steps, render=False, goal=True, obstacles=True):
     robots = [
         Prius(mode="vel"),
     ]
@@ -47,10 +51,30 @@ def run_prius(n_steps=100, render=False, goal=True, obstacles=True):
     cyaw = our_MPC.smooth_yaw(cyaw)
     oa, od = None, None
 
+    # plot spline
+    # for i, _ in enumerate(cx):
+    #     print(cx[i], cy[i])
+    #     plt.arrow(cx[i],
+    #               cy[i],
+    #               0.1 * math.cos(cyaw[i]),
+    #               0.1 * math.sin(cyaw[i]),
+    #               head_width=0.07)
+    # plt.show()
+
     for i in range(n_steps):
 
-        xref, target_ind, dref = our_MPC.calc_ref_trajectory(
-            state, cx, cy, cyaw, ck, sp, dl, target_ind)
+        # xref, target_ind, dref = our_MPC.calc_ref_trajectory(
+        #     state, cx, cy, cyaw, ck, sp, dl, target_ind)
+
+        # for i, _ in enumerate(xref):
+        #     print(cx[i], cy[i])
+        #     plt.arrow(xref[i, 0],
+        #               xref[i, 1],
+        #               0.1 * math.cos(xref[i, 3]),
+        #               0.1 * math.sin(xref[i, 3]),
+        #               head_width=0.07)
+        # plt.show()
+        # print(xref)
 
         x0 = [state.x, state.y, state.v, state.yaw]  # current state
 
@@ -65,21 +89,14 @@ def run_prius(n_steps=100, render=False, goal=True, obstacles=True):
         action[0] = acc[0]*our_MPC.DT + action[0]
         action[1] = action[0] * math.sin(delta[0]) / our_MPC.WB
 
-        # print(f"""
-        #     vel: {action[0]}
-        #     yaw_rate: {action[1]}
-        # """)
         ob, _, _, _ = env.step(action)
 
-        # if i%100 == 0:
-        print(f"{ob['robot_0']['joint_state']['position']}")
-        # if ob['robot_0']['joint_state']['steering'] > 0.1 or ob['robot_0']['joint_state']['steering'] < -1:
-        #    action[1] = 0
+        # print(f"{ob['robot_0']['joint_state']['position']}")
 
-        history.append(ob)
+    history.append(ob)
     env.close()
     return history
 
 
 if __name__ == "__main__":
-    run_prius(render=True)
+    run_prius(n_steps=N_STEPS, render=RENDER)

@@ -10,7 +10,6 @@ import pathlib
 import sys
 
 import cvxpy
-import matplotlib.pyplot as plt
 import numpy as np
 
 import cubic_spline_planner
@@ -176,8 +175,8 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
-    # else:
-    #    print("Iterative is max iter")
+    else:
+        print("Max iterations reached")
 
     return oa, od  # , ox, oy, oyaw, ov
 
@@ -324,8 +323,8 @@ def smooth_yaw(yaw):
 
 
 def get_forward_course(dl):
-    ax = [0.0, 5.0]
-    ay = [0.0, 5.0]
+    ax = [0.0, 5.0, 10.0]
+    ay = [0.0, 5.0, -5.0]
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
         ax, ay, ds=dl)
 

@@ -5,25 +5,24 @@ Path tracking simulation with iterative linear model predictive control for spee
 author: Atsushi Sakai (@Atsushi_twi)
 
 """
-import matplotlib.pyplot as plt
-import cvxpy
-import math
-import numpy as np
-import sys
 import pathlib
-sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
+import sys
+
+import cvxpy
+import numpy as np
+
 import cubic_spline_planner
 
-
+sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
 T = 5  # horizon length
 
 # mpc parameters
-R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 0.01])  # input difference cost matrix
-Q = np.diag([5.0, 5.0, 0.5, 0.5])  # state cost matrix
+R = np.diag([0.0, 0.0])  # input cost matrix
+Rd = np.diag([0.0, 0.0])  # input difference cost matrix
+Q = np.diag([1.0, 1.0, 0.0, 0.0])  # state cost matrix
 Qf = Q  # state final matrix
 GOAL_DIS = 1.5  # goal distance
 STOP_SPEED = 0.5 / 3.6  # stop speed
@@ -41,79 +40,64 @@ DT = 0.03  # [s] time tick
 TREAD = 1.5
 WB = 2.7  # [m]
 
-MAX_STEER = 0.6487 #np.deg2rad(45.0)  # maximum steering angle [rad]
+MAX_STEER = 0.6487  # np.deg2rad(45.0)  # maximum steering angle [rad]
+MIN_STEER = -MAX_STEER  # np.deg2rad(45.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
 MAX_SPEED = 38  # maximum speed [m/s]
 MIN_SPEED = -7.0  # minimum speed [m/s]
-MAX_ACCEL = 1.0  # maximum accel [m/ss]
 
 
 class State:
     """
     vehicle state class
     """
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
+
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, steering=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw
-        self.v = v
+        self.steering = steering
         self.predelta = None
 
 
 def pi_2_pi(angle):
-    while(angle > math.pi):
-        angle = angle - 2.0 * math.pi
+    while angle > np.pi:
+        angle = angle - 2.0 * np.pi
 
-    while(angle < -math.pi):
-        angle = angle + 2.0 * math.pi
+    while angle < -np.pi:
+        angle = angle + 2.0 * np.pi
 
     return angle
 
 
-def get_linear_model_matrix(v, phi, delta):
+def get_linear_model_matrix(yaw, steering):
 
     A = np.zeros((NX, NX))
     A[0, 0] = 1.0
     A[1, 1] = 1.0
     A[2, 2] = 1.0
     A[3, 3] = 1.0
-    A[0, 2] = DT * math.cos(phi)
-    A[0, 3] = - DT * v * math.sin(phi)
-    A[1, 2] = DT * math.sin(phi)
-    A[1, 3] = DT * v * math.cos(phi)
-    A[3, 2] = DT * math.tan(delta) / WB
 
     B = np.zeros((NX, NU))
-    B[2, 0] = DT
-    B[3, 1] = DT * v / (WB * math.cos(delta) ** 2)
+    B[0, 0] = np.cos(yaw) * DT
+    B[1, 0] = np.sin(yaw) * DT
+    B[2, 0] = np.sin(steering) / WB * DT
+    B[3, 1] = DT
 
-    C = np.zeros(NX)
-    C[0] = DT * v * math.sin(phi) * phi
-    C[1] = - DT * v * math.cos(phi) * phi
-    C[3] = - DT * v * delta / (WB * math.cos(delta) ** 2)
-
-    return A, B, C
+    return A, B
 
 
-
-
-def update_state(state, a, delta):
+def update_state(state, velocity, yaw_rate):
 
     # input check
-    if delta >= MAX_STEER:
-        delta = MAX_STEER
-    elif delta <= -MAX_STEER:
-        delta = -MAX_STEER
+    velocity = np.clip(velocity, MIN_SPEED, MAX_SPEED)
 
-    state.x = state.x + state.v * math.cos(state.yaw) * DT
-    state.y = state.y + state.v * math.sin(state.yaw) * DT
-    state.yaw = state.yaw + state.v / WB * math.tan(delta) * DT
-    state.v = state.v + a * DT
+    state.x += velocity * np.cos(state.yaw) * DT
+    state.y += velocity * np.sin(state.yaw) * DT
+    state.yaw += velocity / WB * np.tan(state.steering) * DT
+    state.steering += yaw_rate * DT
 
-    if state.v > MAX_SPEED:
-        state.v = MAX_SPEED
-    elif state.v < MIN_SPEED:
-        state.v = MIN_SPEED
+    state.steering = np.clip(state.steering, MIN_STEER, MAX_STEER)
 
     return state
 
@@ -133,55 +117,54 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
 
     ind = d.index(mind) + pind
 
-    mind = math.sqrt(mind)
+    mind = np.sqrt(mind)
 
     dxl = cx[ind] - state.x
     dyl = cy[ind] - state.y
 
-    angle = pi_2_pi(cyaw[ind] - math.atan2(dyl, dxl))
+    angle = pi_2_pi(cyaw[ind] - np.atan2(dyl, dxl))
     if angle < 0:
         mind *= -1
 
     return ind, mind
 
 
-def predict_motion(x0, oa, od, xref):
+def predict_motion(x0, ovel, oyr, xref):
     xbar = xref * 0.0
-    for i, _ in enumerate(x0):
-        xbar[i, 0] = x0[i]
+    xbar[:, 0] = x0
 
-    state = State(x=x0[0], y=x0[1], yaw=x0[3], v=x0[2])
-    for (ai, di, i) in zip(oa, od, range(1, T + 1)):
-        state = update_state(state, ai, di)
-        xbar[0, i] = state.x
-        xbar[1, i] = state.y
-        xbar[2, i] = state.v
-        xbar[3, i] = state.yaw
+    state = State(*xbar[:, 0])
+    for (veli, yri, i) in zip(ovel, oyr, range(1, T + 1)):
+        state = update_state(state, veli, yri)
+        xbar[:, i] = [state.x, state.y, state.yaw, state.steering]
 
     return xbar
 
 
-def iterative_linear_mpc_control(xref, x0, dref, oa, od):
+def iterative_linear_mpc_control(xref, x0, dref, ovel, oyr):
     """
     MPC contorl with updating operational point iteraitvely
     """
 
-    if oa is None or od is None:
-        oa = [0.0] * T
-        od = [0.0] * T
+    if ovel is None or oyr is None:
+        ovel = [0.0] * T
+        oyr = [0.0] * T
 
     for i in range(MAX_ITER):
-        xbar = predict_motion(x0, oa, od, xref)
-        poa, pod = oa[:], od[:]
-        oa, od, ox, oy, ov, oyaw = linear_mpc_control(xref, xbar, x0, dref)
+        print("STEP: ", i)
+        xbar = predict_motion(x0, ovel, oyr, xref)
+        povel, poyr = ovel[:], oyr[:]
+        ovel, oyr, ox, oy, oyaw, osteer = linear_mpc_control(
+            xref, xbar, x0, dref)
 
-        du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
+        du = sum(abs(ovel - povel)) + \
+            sum(abs(oyr - poyr))  # calc u change value
         if du <= DU_TH:
             break
     else:
         print("Iterative is max iter")
 
-    return oa, od, ox, oy, ov, oyaw
+    return ovel, oyr
 
 
 def linear_mpc_control(xref, xbar, x0, dref):
@@ -204,25 +187,25 @@ def linear_mpc_control(xref, xbar, x0, dref):
         cost += cvxpy.quad_form(u[:, t], R)
 
         if t != 0:
-            cost += cvxpy.quad_form(xref[:,t] - x[:,t], Q)
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
 
-        A, B, C = get_linear_model_matrix(xbar[2, t], xbar[3, t], dref[0, t])
+        A, B = get_linear_model_matrix(xbar[2, t], xbar[3, t])
 
-        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t]]
 
         if t < (T - 1):
             # pay if big difference from an input and the next: high consumption
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
-            constraints += [cvxpy.abs(u[1, t + 1] - u[1, t]) <= MAX_DSTEER * DT]
+            constraints += [cvxpy.abs(x[3, t + 1] - x[3, t])
+                            <= MAX_DSTEER * DT]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
-    constraints += [x[2, :] <= MAX_SPEED]
-    constraints += [x[2, :] >= MIN_SPEED]
-    constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [u[0, :] <= MAX_SPEED]
+    constraints += [u[0, :] >= MIN_SPEED]
+    constraints += [cvxpy.abs(x[3, :]) <= MAX_STEER]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.OSQP, verbose=False)
@@ -230,16 +213,16 @@ def linear_mpc_control(xref, xbar, x0, dref):
     if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
         ox = get_nparray_from_matrix(x.value[0, :])
         oy = get_nparray_from_matrix(x.value[1, :])
-        ov = get_nparray_from_matrix(x.value[2, :])
-        oyaw = get_nparray_from_matrix(x.value[3, :])
-        oa = get_nparray_from_matrix(u.value[0, :])
-        odelta = get_nparray_from_matrix(u.value[1, :])
+        oyaw = get_nparray_from_matrix(x.value[2, :])
+        osteer = get_nparray_from_matrix(x.value[3, :])
+        ovel = get_nparray_from_matrix(u.value[0, :])
+        oyr = get_nparray_from_matrix(u.value[1, :])
 
     else:
         print("Error: Cannot solve mpc..")
-        oa, odelta, ox, oy, ov, oyaw  = None, None, None, None, None, None
+        ovel, oyr, ox, oy, oyaw, osteer = None, None, None, None, None, None
 
-    return oa, odelta, ox, oy, ov, oyaw
+    return ovel, oyr, ox, oy, oyaw, osteer
 
 
 def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
@@ -285,7 +268,7 @@ def check_goal(state, goal, tind, nind):
     # check goal
     dx = state.x - goal[0]
     dy = state.y - goal[1]
-    d = math.hypot(dx, dy)
+    d = np.hypot(dx, dy)
 
     isgoal = (d <= GOAL_DIS)
 
@@ -300,7 +283,6 @@ def check_goal(state, goal, tind, nind):
     return False
 
 
-
 def calc_speed_profile(cx, cy, cyaw, target_speed):
 
     speed_profile = [target_speed] * len(cx)
@@ -311,11 +293,11 @@ def calc_speed_profile(cx, cy, cyaw, target_speed):
         dx = cx[i + 1] - cx[i]
         dy = cy[i + 1] - cy[i]
 
-        move_direction = math.atan2(dy, dx)
+        move_direction = np.atan2(dy, dx)
 
         if dx != 0.0 and dy != 0.0:
             dangle = abs(pi_2_pi(move_direction - cyaw[i]))
-            if dangle >= math.pi / 4.0:
+            if dangle >= np.pi / 4.0:
                 direction = -1.0
             else:
                 direction = 1.0
@@ -335,21 +317,21 @@ def smooth_yaw(yaw):
     for i in range(len(yaw) - 1):
         dyaw = yaw[i + 1] - yaw[i]
 
-        while dyaw >= math.pi / 2.0:
-            yaw[i + 1] -= math.pi * 2.0
+        while dyaw >= np.pi / 2.0:
+            yaw[i + 1] -= np.pi * 2.0
             dyaw = yaw[i + 1] - yaw[i]
 
-        while dyaw <= -math.pi / 2.0:
-            yaw[i + 1] += math.pi * 2.0
+        while dyaw <= -np.pi / 2.0:
+            yaw[i + 1] += np.pi * 2.0
             dyaw = yaw[i + 1] - yaw[i]
 
     return yaw
 
 
-
 def get_forward_course(dl):
-    ax = [0.0, 8.0] #[8.0, 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    ay = [0.0, 8.0]#, 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
+    ax = [0.0, 8.0]  # [8.0, 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    ay = [0.0, 8.0]  # , 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
 
     return cx, cy, cyaw, ck
