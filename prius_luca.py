@@ -41,21 +41,19 @@ def run_prius(n_steps=500, render=False, goal=True, obstacles=True):
     splineGoal = DynamicSubGoal(name="goal3", content_dict=splineGoalDict)
     env.add_goal(splineGoal)
 
-    actions = np.array([None, None])
+    actions = np.array([[0, 0]] * MPC_luca.T)
     xref = np.zeros((MPC_luca.NX, MPC_luca.T + 1))
-    xref[1:, :2] = 8.0
+    xref[:2, :] = 8.0
 
     dref = np.zeros((1, MPC_luca.T + 1))
-    delta_max = 0
-    steer_max = 0
 
     for i in range(n_steps):
 
         x0 = [state.x, state.y, state.yaw, state.steering]
         actions = np.array(MPC_luca.iterative_linear_mpc_control(
-            xref, x0, dref, *actions))
+            xref, x0, dref, actions[:, 0], actions[:, 1])).T
 
-        state = MPC_luca.update_state(state, *actions[:, 0])
+        state = MPC_luca.update_state(state, *actions[0])
 
         # if ob['robot_0']['joint_state']['steering'] > MPC_luca.MAX_STEER \
         #         or ob['robot_0']['joint_state']['steering'] < -MPC_luca.MAX_STEER:
@@ -64,12 +62,10 @@ def run_prius(n_steps=500, render=False, goal=True, obstacles=True):
         print(f"vel: {actions[0, 0]}   yaw_rate: {actions[0, 1]} \
               steering: {ob['robot_0']['joint_state']['steering']}")
 
-        ob, _, _, _ = env.step(actions[:, 0])
+        ob, _, _, _ = env.step(actions[0])
 
         history.append(ob)
 
-    print(f"steer_max = {steer_max} \
-          delta_max = {delta_max}")
     env.close()
     return history
 

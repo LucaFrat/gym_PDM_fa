@@ -11,12 +11,10 @@ import sys
 import cvxpy
 import numpy as np
 
-import cubic_spline_planner
-
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
-NX = 4  # x = x, y, v, yaw
-NU = 2  # a = [accel, steer]
+NX = 4  # x = x, y, yaw, steering
+NU = 2  # u = [velocity, yaw_rate]
 T = 5  # horizon length
 
 # mpc parameters
@@ -81,7 +79,7 @@ def get_linear_model_matrix(yaw, steering):
     B = np.zeros((NX, NU))
     B[0, 0] = np.cos(yaw) * DT
     B[1, 0] = np.sin(yaw) * DT
-    B[2, 0] = np.sin(steering) / WB * DT
+    B[2, 0] = np.tan(steering) / WB * DT
     B[3, 1] = DT
 
     return A, B
@@ -90,11 +88,9 @@ def get_linear_model_matrix(yaw, steering):
 def update_state(state, velocity, yaw_rate):
 
     # input check
-    velocity = np.clip(velocity, MIN_SPEED, MAX_SPEED)
-
     state.x += velocity * np.cos(state.yaw) * DT
     state.y += velocity * np.sin(state.yaw) * DT
-    state.yaw += velocity / WB * np.tan(state.steering) * DT
+    state.yaw += velocity * np.tan(state.steering) / WB * DT
     state.steering += yaw_rate * DT
 
     state.steering = np.clip(state.steering, MIN_STEER, MAX_STEER)
@@ -151,7 +147,6 @@ def iterative_linear_mpc_control(xref, x0, dref, ovel, oyr):
         oyr = [0.0] * T
 
     for i in range(MAX_ITER):
-        print("STEP: ", i)
         xbar = predict_motion(x0, ovel, oyr, xref)
         povel, poyr = ovel[:], oyr[:]
         ovel, oyr, ox, oy, oyaw, osteer = linear_mpc_control(
@@ -162,7 +157,7 @@ def iterative_linear_mpc_control(xref, x0, dref, ovel, oyr):
         if du <= DU_TH:
             break
     else:
-        print("Iterative is max iter")
+        print("== Max iterations reached")
 
     return ovel, oyr
 
@@ -261,77 +256,3 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
             dref[0, i] = 0.0
 
     return xref, ind, dref
-
-
-def check_goal(state, goal, tind, nind):
-
-    # check goal
-    dx = state.x - goal[0]
-    dy = state.y - goal[1]
-    d = np.hypot(dx, dy)
-
-    isgoal = (d <= GOAL_DIS)
-
-    if abs(tind - nind) >= 5:
-        isgoal = False
-
-    isstop = (abs(state.v) <= STOP_SPEED)
-
-    if isgoal and isstop:
-        return True
-
-    return False
-
-
-def calc_speed_profile(cx, cy, cyaw, target_speed):
-
-    speed_profile = [target_speed] * len(cx)
-    direction = 1.0  # forward
-
-    # Set stop point
-    for i in range(len(cx) - 1):
-        dx = cx[i + 1] - cx[i]
-        dy = cy[i + 1] - cy[i]
-
-        move_direction = np.atan2(dy, dx)
-
-        if dx != 0.0 and dy != 0.0:
-            dangle = abs(pi_2_pi(move_direction - cyaw[i]))
-            if dangle >= np.pi / 4.0:
-                direction = -1.0
-            else:
-                direction = 1.0
-
-        if direction != 1.0:
-            speed_profile[i] = - target_speed
-        else:
-            speed_profile[i] = target_speed
-
-    speed_profile[-1] = 0.0
-
-    return speed_profile
-
-
-def smooth_yaw(yaw):
-
-    for i in range(len(yaw) - 1):
-        dyaw = yaw[i + 1] - yaw[i]
-
-        while dyaw >= np.pi / 2.0:
-            yaw[i + 1] -= np.pi * 2.0
-            dyaw = yaw[i + 1] - yaw[i]
-
-        while dyaw <= -np.pi / 2.0:
-            yaw[i + 1] += np.pi * 2.0
-            dyaw = yaw[i + 1] - yaw[i]
-
-    return yaw
-
-
-def get_forward_course(dl):
-    ax = [0.0, 8.0]  # [8.0, 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    ay = [0.0, 8.0]  # , 12.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
-
-    return cx, cy, cyaw, ck
