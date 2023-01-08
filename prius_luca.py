@@ -6,21 +6,21 @@ import MPC_luca
 from urdfenvs.robots.prius import Prius
 
 
-def run_prius(n_steps=500, render=False, goal=True, obstacles=True):
+def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     robots = [
         Prius(mode="vel")
     ]
     env = gym.make(
         "urdf-env-v0",
-        dt=MPC_lucag.DT, robots=robots, render=render
+        dt=MPC_luca.DT,
+        robots=robots,
+        render=render
     )
 
     pos0 = np.array([0.0, 0.0, 0.0])
     ob = env.reset(pos=pos0)
 
     history = []
-
-    state = MPC_luca.State(*pos0, steering=0.0)
 
     splineGoalDict = {
         "weight": 1.0,
@@ -41,26 +41,28 @@ def run_prius(n_steps=500, render=False, goal=True, obstacles=True):
     splineGoal = DynamicSubGoal(name="goal3", content_dict=splineGoalDict)
     env.add_goal(splineGoal)
 
-    actions = np.array([[0, 0]] * MPC_luca.T)
-    xref = np.zeros((MPC_luca.NX, MPC_luca.T + 1))
-    xref[:2, :] = 8.0
+    x = np.zeros(4)
 
-    dref = np.zeros((1, MPC_luca.T + 1))
+    actions = np.array([[0, 0]] * MPC_luca.T)
+
+    # goal state
+    xref = np.array([8.0, 8.0, 1.0, 0.5])
 
     for i in range(n_steps):
+        x[0] = ob['robot_0']['joint_state']['position'][0]
+        x[1] = ob['robot_0']['joint_state']['position'][0]
+        x[2] += actions[0, 0] * np.tan(x[3]) / MPC_luca.WB * MPC_luca.DT
+        x[3] = ob['robot_0']['joint_state']['steering']
+        print("state: ", x)
 
-        x0 = [state.x, state.y, state.yaw, state.steering]
-        actions = np.array(MPC_luca.iterative_linear_mpc_control(
-            xref, x0, dref, actions[:, 0], actions[:, 1])).T
+        actions = np.array(MPC_luca.linear_mpc_control(
+            x,
+            xref,
+            actions[:, 0],
+            actions[:, 1])
+        ).T
 
-        state = MPC_luca.update_state(state, *actions[0])
-
-        # if ob['robot_0']['joint_state']['steering'] > MPC_luca.MAX_STEER \
-        #         or ob['robot_0']['joint_state']['steering'] < -MPC_luca.MAX_STEER:
-        #     action[1] = 0
-
-        print(f"vel: {actions[0, 0]}   yaw_rate: {actions[0, 1]} \
-              steering: {ob['robot_0']['joint_state']['steering']}")
+        print(f"vel: {actions[0, 0]}   yaw_rate: {actions[0, 1]}")
 
         ob, _, _, _ = env.step(actions[0])
 

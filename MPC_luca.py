@@ -8,7 +8,7 @@ author: Atsushi Sakai (@Atsushi_twi)
 import pathlib
 import sys
 
-import cvxpy
+import cvxpy as cp
 import numpy as np
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
@@ -22,10 +22,6 @@ R = np.diag([1, 1])  # input cost matrix
 Rd = np.diag([10, 10])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 1.0, 1.0])  # state cost matrix
 Qf = Q  # state final matrix
-
-# iterative paramter
-MAX_ITER = 1  # Max iteration
-DU_TH = 0.1  # iteration finish param
 
 DT = 0.03  # [s] time tick
 
@@ -68,80 +64,42 @@ def get_linear_model_matrix(yaw, steering):
     return A, B
 
 
-def update_state(state, velocity, yaw_rate):
+def predict_motion(x, velocities, yaw_rates):
+    xbar = np.zeros((len(x), len(velocities) + 1))
+    xbar[:, 0] = x
 
-    state.x += velocity * np.cos(state.yaw) * DT
-    state.y += velocity * np.sin(state.yaw) * DT
-    state.yaw += velocity * np.tan(state.steering) / WB * DT
-    state.steering += yaw_rate * DT
+    for (velocity, yaw_rate, t) in zip(velocities, yaw_rates, range(1, T + 1)):
+        A, B = get_linear_model_matrix(*x[2:])
+        xbar[:, t] = A @ xbar[:, t - 1] + B @ [velocity, yaw_rate]
 
-    state.steering = np.clip(state.steering, MIN_STEER, MAX_STEER)
-
-    return state
+    return xbar
 
 
 def get_nparray_from_matrix(x):
     return np.array(x).flatten()
 
 
-def predict_motion(x0, ovel, oyr, xref):
-    xbar = xref * 0.0
-    xbar[:, 0] = x0
-
-    state = State(*x0)
-    for (veli, yri, i) in zip(ovel, oyr, range(1, T + 1)):
-        state = update_state(state, veli, yri)
-        xbar[:, i] = [state.x, state.y, state.yaw, state.steering]
-
-    return xbar
-
-
-def iterative_linear_mpc_control(xref, x0, dref, ovel, oyr):
-    """
-    MPC contorl with updating operational point iteraitvely
-    """
-
-    if ovel is None or oyr is None:
-        ovel = [0.0] * T
-        oyr = [0.0] * T
-
-    for i in range(MAX_ITER):
-        xbar = predict_motion(x0, ovel, oyr, xref)
-        povel, poyr = ovel[:], oyr[:]
-        ovel, oyr, ox, oy, oyaw, osteer = linear_mpc_control(
-            xref, xbar, x0, dref)
-
-        du = sum(abs(ovel - povel)) + \
-            sum(abs(oyr - poyr))  # calc u change value
-        if du <= DU_TH:
-            break
-    else:
-        print("== Max iterations reached")
-
-    return ovel, oyr
-
-
-def linear_mpc_control(xref, xbar, x0, dref):
+def linear_mpc_control(x0, xref, velocities, yaw_rates):
     """
     linear mpc control
 
     xref: reference point
-    xbar: operational point
-    x0: initial state
-    dref: reference steer angle
+    x: initial state
     """
 
-    x = cvxpy.Variable((NX, T + 1))
-    u = cvxpy.Variable((NU, T))
+    x = cp.Variable((NX, T + 1))
+    u = cp.Variable((NU, T))
 
     cost = 0.0
     constraints = []
 
+    xbar = predict_motion(x0, velocities, yaw_rates)
+
     for t in range(T):
-        cost += cvxpy.quad_form(u[:, t], R)
+        cost += cp.quad_form(u[:, t], R)
 
         if t != 0:
-            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+            cost += cp.quad_form(xref - x[:, t], Q)
 
         A, B = get_linear_model_matrix(xbar[2, t], xbar[3, t])
 
@@ -149,33 +107,26 @@ def linear_mpc_control(xref, xbar, x0, dref):
 
         if t < (T - 1):
             # pay if big difference from an input and the next: high consumption
-            cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
-            constraints += [cvxpy.abs(x[3, t + 1] - x[3, t])
+            cost += cp.quad_form(u[:, t + 1] - u[:, t], Rd)
+            constraints += [cp.abs(x[3, t + 1] - x[3, t])
                             <= MAX_DSTEER * DT]
-            constraints += [cvxpy.abs(u[1, t + 1] - u[1, t])
+            constraints += [cp.abs(u[1, t + 1] - u[1, t])
                             <= MAX_ACCEL * DT]
 
     # normal error state cost, last horizon step
-    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+    cost += cp.quad_form(xref - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
     constraints += [u[0, :] <= MAX_SPEED]
     constraints += [u[0, :] >= MIN_SPEED]
-    constraints += [cvxpy.abs(x[3, :]) <= MAX_STEER]
+    constraints += [cp.abs(x[3, :]) <= MAX_STEER]
 
-    prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
-    prob.solve(solver=cvxpy.OSQP, verbose=False)
+    prob = cp.Problem(cp.Minimize(cost), constraints)
+    prob.solve(solver=cp.ECOS, verbose=False)
 
-    if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
-        ox = get_nparray_from_matrix(x.value[0, :])
-        oy = get_nparray_from_matrix(x.value[1, :])
-        oyaw = get_nparray_from_matrix(x.value[2, :])
-        osteer = get_nparray_from_matrix(x.value[3, :])
-        ovel = get_nparray_from_matrix(u.value[0, :])
-        oyr = get_nparray_from_matrix(u.value[1, :])
+    velocity = yaw_rate = 0
+    if prob.status == cp.OPTIMAL or prob.status == cp.OPTIMAL_INACCURATE:
+        velocity = get_nparray_from_matrix(u.value[0, :])
+        yaw_rate = get_nparray_from_matrix(u.value[1, :])
 
-    else:
-        print("Error: Cannot solve mpc..")
-        ovel, oyr, ox, oy, oyaw, osteer = None, None, None, None, None, None
-
-    return ovel, oyr, ox, oy, oyaw, osteer
+    return velocity, yaw_rate
