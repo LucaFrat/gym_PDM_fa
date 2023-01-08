@@ -18,16 +18,16 @@ NU = 2  # u = [velocity, yaw_rate]
 T = 5  # horizon length
 
 # mpc parameters
-R = np.diag([0.0, 0.0])  # input cost matrix
-Rd = np.diag([0.0, 0.0])  # input difference cost matrix
-Q = np.diag([1.0, 1.0, 0.0, 0.0])  # state cost matrix
+R = np.diag([1, 1])  # input cost matrix
+Rd = np.diag([10, 10])  # input difference cost matrix
+Q = np.diag([1.0, 1.0, 1.0, 1.0])  # state cost matrix
 Qf = Q  # state final matrix
 GOAL_DIS = 1.5  # goal distance
 STOP_SPEED = 0.5 / 3.6  # stop speed
 MAX_TIME = 1.0  # max simulation time
 
 # iterative paramter
-MAX_ITER = 1  # Max iteration
+MAX_ITER = 2  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
@@ -43,6 +43,7 @@ MIN_STEER = -MAX_STEER  # np.deg2rad(45.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
 MAX_SPEED = 38  # maximum speed [m/s]
 MIN_SPEED = -7.0  # minimum speed [m/s]
+MAX_ACCEL = 27
 
 
 class State:
@@ -87,7 +88,6 @@ def get_linear_model_matrix(yaw, steering):
 
 def update_state(state, velocity, yaw_rate):
 
-    # input check
     state.x += velocity * np.cos(state.yaw) * DT
     state.y += velocity * np.sin(state.yaw) * DT
     state.yaw += velocity * np.tan(state.steering) / WB * DT
@@ -129,7 +129,7 @@ def predict_motion(x0, ovel, oyr, xref):
     xbar = xref * 0.0
     xbar[:, 0] = x0
 
-    state = State(*xbar[:, 0])
+    state = State(*x0)
     for (veli, yri, i) in zip(ovel, oyr, range(1, T + 1)):
         state = update_state(state, veli, yri)
         xbar[:, i] = [state.x, state.y, state.yaw, state.steering]
@@ -193,6 +193,8 @@ def linear_mpc_control(xref, xbar, x0, dref):
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
             constraints += [cvxpy.abs(x[3, t + 1] - x[3, t])
                             <= MAX_DSTEER * DT]
+            constraints += [cvxpy.abs(u[1, t + 1] - u[1, t])
+                            <= MAX_ACCEL * DT]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
