@@ -12,7 +12,7 @@ def run_prius(n_steps=500, render=False, goal=True, obstacles=True):
     ]
     env = gym.make(
         "urdf-env-v0",
-        dt=0.03, robots=robots, render=render
+        dt=MPC_lucag.DT, robots=robots, render=render
     )
 
     pos0 = np.array([0.0, 0.0, 0.0])

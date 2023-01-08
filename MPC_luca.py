@@ -15,27 +15,20 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 NX = 4  # x = x, y, yaw, steering
 NU = 2  # u = [velocity, yaw_rate]
-T = 5  # horizon length
+T = 20  # horizon length
 
 # mpc parameters
 R = np.diag([1, 1])  # input cost matrix
 Rd = np.diag([10, 10])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 1.0, 1.0])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 1.0  # max simulation time
 
 # iterative paramter
-MAX_ITER = 2  # Max iteration
+MAX_ITER = 1  # Max iteration
 DU_TH = 0.1  # iteration finish param
-
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
 
 DT = 0.03  # [s] time tick
 
-TREAD = 1.5
 WB = 2.7  # [m]
 
 MAX_STEER = 0.6487  # np.deg2rad(45.0)  # maximum steering angle [rad]
@@ -56,17 +49,6 @@ class State:
         self.y = y
         self.yaw = yaw
         self.steering = steering
-        self.predelta = None
-
-
-def pi_2_pi(angle):
-    while angle > np.pi:
-        angle = angle - 2.0 * np.pi
-
-    while angle < -np.pi:
-        angle = angle + 2.0 * np.pi
-
-    return angle
 
 
 def get_linear_model_matrix(yaw, steering):
@@ -100,29 +82,6 @@ def update_state(state, velocity, yaw_rate):
 
 def get_nparray_from_matrix(x):
     return np.array(x).flatten()
-
-
-def calc_nearest_index(state, cx, cy, cyaw, pind):
-
-    dx = [state.x - icx for icx in cx[pind:(pind + N_IND_SEARCH)]]
-    dy = [state.y - icy for icy in cy[pind:(pind + N_IND_SEARCH)]]
-
-    d = [idx ** 2 + idy ** 2 for (idx, idy) in zip(dx, dy)]
-
-    mind = min(d)
-
-    ind = d.index(mind) + pind
-
-    mind = np.sqrt(mind)
-
-    dxl = cx[ind] - state.x
-    dyl = cy[ind] - state.y
-
-    angle = pi_2_pi(cyaw[ind] - np.atan2(dyl, dxl))
-    if angle < 0:
-        mind *= -1
-
-    return ind, mind
 
 
 def predict_motion(x0, ovel, oyr, xref):
@@ -220,41 +179,3 @@ def linear_mpc_control(xref, xbar, x0, dref):
         ovel, oyr, ox, oy, oyaw, osteer = None, None, None, None, None, None
 
     return ovel, oyr, ox, oy, oyaw, osteer
-
-
-def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
-    xref = np.zeros((NX, T + 1))
-    dref = np.zeros((1, T + 1))
-    ncourse = len(cx)
-
-    ind, _ = calc_nearest_index(state, cx, cy, cyaw, pind)
-
-    if pind >= ind:
-        ind = pind
-
-    xref[0, 0] = cx[ind]
-    xref[1, 0] = cy[ind]
-    xref[2, 0] = sp[ind]
-    xref[3, 0] = cyaw[ind]
-    dref[0, 0] = 0.0  # steer operational point should be 0
-
-    travel = 0.0
-
-    for i in range(T + 1):
-        travel += abs(state.v) * DT
-        dind = int(round(travel / dl))
-
-        if (ind + dind) < ncourse:
-            xref[0, i] = cx[ind + dind]
-            xref[1, i] = cy[ind + dind]
-            xref[2, i] = sp[ind + dind]
-            xref[3, i] = cyaw[ind + dind]
-            dref[0, i] = 0.0
-        else:
-            xref[0, i] = cx[ncourse - 1]
-            xref[1, i] = cy[ncourse - 1]
-            xref[2, i] = sp[ncourse - 1]
-            xref[3, i] = cyaw[ncourse - 1]
-            dref[0, i] = 0.0
-
-    return xref, ind, dref
