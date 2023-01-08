@@ -59,6 +59,9 @@ def get_linear_model_matrix(yaw, steering):
     B[0, 0] = np.cos(yaw) * DT
     B[1, 0] = np.sin(yaw) * DT
     B[2, 0] = np.tan(steering) / WB * DT
+    # B[0, 0] = (1 - yaw ** 2 / 2) * DT
+    # B[1, 0] = yaw * DT
+    # B[2, 0] = steering / (1 - steering ** 2 / 2) / WB * DT
     B[3, 1] = DT
 
     return A, B
@@ -95,13 +98,21 @@ def linear_mpc_control(x0, xref, velocities, yaw_rates):
 
     xbar = predict_motion(x0, velocities, yaw_rates)
 
+    # A = np.eye(4)
+    # B = [cp.Variable((NX, NU)) for _ in range(T)]
+
     for t in range(T):
         cost += cp.quad_form(u[:, t], R)
 
         if t != 0:
             cost += cp.quad_form(xref - x[:, t], Q)
 
-        A, B = get_linear_model_matrix(xbar[2, t], xbar[3, t])
+        # constraints += [x[0, t + 1] == x[0, t] + (1 - x[2, t] ** 2 / 2) * u[0, t] * DT]
+        # constraints += [x[1, t + 1] == x[1, t] + x[2, t] * u[0, t] * DT]
+        # constraints += [x[2, t + 1] == x[2, t] + x[3, t] / (1 - x[3, t] ** 2 / 2) / WB * u[0, t] * DT]
+        # constraints += [x[3, t + 1] == x[3, t] + u[1, t] * DT]
+
+        A, B = get_linear_model_matrix(*xbar[2:, t])
 
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t]]
 
