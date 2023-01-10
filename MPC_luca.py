@@ -13,26 +13,25 @@ import numpy as np
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
-NX = 4  # x = x, y, yaw, steering
+NX = 4  # x = [x, y, yaw, steering]
 NU = 2  # u = [velocity, yaw_rate]
-T = 20  # horizon length
+DT = 0.02  # time tick (s)
+T = int(5 / DT)  # horizon length
 
 # mpc parameters
-R = np.diag([1, 1])  # input cost matrix
+R = np.diag([10, 10])  # input cost matrix
 Rd = np.diag([10, 10])  # input difference cost matrix
-Q = np.diag([1.0, 1.0, 1.0, 1.0])  # state cost matrix
+Q = np.diag([1, 1, 10, 0.1])  # state cost matrix
 Qf = Q  # state final matrix
 
-DT = 0.03  # [s] time tick
+WB = 2.7  # (m)
 
-WB = 2.7  # [m]
-
-MAX_STEER = 0.6487  # np.deg2rad(45.0)  # maximum steering angle [rad]
-MIN_STEER = -MAX_STEER  # np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 38  # maximum speed [m/s]
-MIN_SPEED = -7.0  # minimum speed [m/s]
-MAX_ACCEL = 27
+MAX_STEER = 0.6487  # np.deg2rad(45.0)  # maximum steering angle (rad)
+MIN_STEER = -MAX_STEER  # np.deg2rad(45.0)  # maximum steering angle (rad)
+MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed (rad/s)
+MAX_SPEED = 38  # maximum speed (m/s)
+MIN_SPEED = -7.0  # minimum speed (m/s)
+MAX_ACCEL = 10  # maximum acceleration (m/s)
 
 
 class State:
@@ -59,9 +58,9 @@ def get_linear_model_matrix(yaw, steering):
     B[0, 0] = np.cos(yaw) * DT
     B[1, 0] = np.sin(yaw) * DT
     B[2, 0] = np.tan(steering) / WB * DT
-    # B[0, 0] = (1 - yaw ** 2 / 2) * DT
+    # B[0, 0] = DT
     # B[1, 0] = yaw * DT
-    # B[2, 0] = steering / (1 - steering ** 2 / 2) / WB * DT
+    # B[2, 0] = steering / WB * DT
     B[3, 1] = DT
 
     return A, B
@@ -72,7 +71,7 @@ def predict_motion(x, velocities, yaw_rates):
     xbar[:, 0] = x
 
     for (velocity, yaw_rate, t) in zip(velocities, yaw_rates, range(1, T + 1)):
-        A, B = get_linear_model_matrix(*x[2:])
+        A, B = get_linear_model_matrix(*xbar[2:, t - 1])
         xbar[:, t] = A @ xbar[:, t - 1] + B @ [velocity, yaw_rate]
 
     return xbar
@@ -107,7 +106,7 @@ def linear_mpc_control(x0, xref, velocities, yaw_rates):
         if t != 0:
             cost += cp.quad_form(xref - x[:, t], Q)
 
-        # constraints += [x[0, t + 1] == x[0, t] + (1 - x[2, t] ** 2 / 2) * u[0, t] * DT]
+        # constraints += [x[0, t + 1] == x[0, t] + u[0, t] * DT]
         # constraints += [x[1, t + 1] == x[1, t] + x[2, t] * u[0, t] * DT]
         # constraints += [x[2, t + 1] == x[2, t] + x[3, t] / (1 - x[3, t] ** 2 / 2) / WB * u[0, t] * DT]
         # constraints += [x[3, t + 1] == x[3, t] + u[1, t] * DT]
@@ -121,7 +120,7 @@ def linear_mpc_control(x0, xref, velocities, yaw_rates):
             cost += cp.quad_form(u[:, t + 1] - u[:, t], Rd)
             constraints += [cp.abs(x[3, t + 1] - x[3, t])
                             <= MAX_DSTEER * DT]
-            constraints += [cp.abs(u[1, t + 1] - u[1, t])
+            constraints += [cp.abs(u[0, t + 1] - u[0, t])
                             <= MAX_ACCEL * DT]
 
     # normal error state cost, last horizon step

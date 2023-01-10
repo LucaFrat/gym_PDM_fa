@@ -5,6 +5,8 @@ from MotionPlanningGoal.dynamicSubGoal import DynamicSubGoal
 import MPC_luca
 from urdfenvs.robots.prius import Prius
 
+DT = 0.01
+
 
 def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     robots = [
@@ -46,12 +48,13 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     actions = np.array([[0, 0]] * MPC_luca.T)
 
     # goal state
-    xref = np.array([8.0, 8.0, 1.0, 0.5])
+    xref = np.array([8.0, 8.0, 1.0, -0.5])
 
     for i in range(n_steps):
         x[0] = ob['robot_0']['joint_state']['position'][0]
-        x[1] = ob['robot_0']['joint_state']['position'][0]
-        x[2] += actions[0, 0] * np.tan(x[3]) / MPC_luca.WB * MPC_luca.DT
+        x[1] = ob['robot_0']['joint_state']['position'][1]
+        x[2] += actions[0, 0] * MPC_luca.DT / DT * \
+            np.tan(x[3]) / MPC_luca.WB * MPC_luca.DT
         x[3] = ob['robot_0']['joint_state']['steering']
         print("state: ", x)
 
@@ -62,9 +65,10 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
             actions[:, 1])
         ).T
 
-        print(f"vel: {actions[0, 0]}   yaw_rate: {actions[0, 1]}")
+        print("actions: ", actions[0, :])
 
-        ob, _, _, _ = env.step(actions[0])
+        for _ in range(int(MPC_luca.DT / DT)):
+            ob, _, _, _ = env.step(actions[0])
 
         history.append(ob)
 
