@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<robot name="rect3">
+  
+  <material name="white">
+    <color rgba="0 0 0.8 1"/>
+  </material>
+  
+  <link name="base_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+       <mass value="800000"/>
+       <inertia ixx="10" ixy="0" ixz="0" iyy="10" iyz="0" izz="10"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.125"/>
+      <geometry>
+        <box size="12 0.5 0.25"/>
+     </geometry>
+     <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.125"/>
+      <geometry>
+      	<box size="12 0.5 0.25"/>  
+      </geometry>
+    </collision>
+  </link>
+</robot>
