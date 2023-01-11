@@ -19,7 +19,7 @@ DT = 0.05  # time tick (s)
 T = int(5 / DT)  # horizon length
 
 MAX_ITER = 10
-DU_TH = 0.1
+DU_TH = 0.01
 
 # mpc parameters
 R = np.diag([10, 10])  # input cost matrix
