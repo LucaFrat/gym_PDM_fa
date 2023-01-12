@@ -5,30 +5,32 @@ Path tracking simulation with iterative linear model predictive control for spee
 author: Atsushi Sakai (@Atsushi_twi)
 
 """
-import math
-import pathlib
-import sys
-
-import cvxpy
 import matplotlib.pyplot as plt
+import cvxpy
+import math
 import numpy as np
+import sys
+import pathlib
 
-import cubic_spline_planner
+import cubic_spline_planner 
 import rrt_star_dubins as rrt_star
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 
+
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
+
 DT = 0.2  # [s] time tick
-T = int(2 / DT)  # [s] horizon length
+T = int(2/DT)  # horizon length
 
 # mpc parameters
-R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 0.1])  # input difference cost matrix
-Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
-Qf = Q  # state final matrix
+R = np.diag([0.3, 0.01])  # input cost matrix
+Rd = np.diag([0.1, 0.002])  # input difference cost matrix
+Q = np.diag([0.2, 0.1, 0.1, 0.1])  # state cost matrix
+Qf = Q *0 # state final matrix
+
 GOAL_DIS = 1.5  # goal distance
 STOP_SPEED = 0.5 / 3.6  # stop speed
 MAX_TIME = 500.0  # max simulation time
@@ -63,7 +65,6 @@ class State:
     """
     vehicle state class
     """
-
     def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
         self.x = x
         self.y = y
@@ -227,7 +228,7 @@ def predict_motion(x0, oa, od, xref):
     return xbar
 
 
-def iterative_linear_mpc_control(xref, x0, dref, oa, od):
+def iterative_linear_mpc_control(xref, x0, dref, oa, od, origin_obst):
     """
     MPC contorl with updating operational point iteraitvely
     """
@@ -239,17 +240,18 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
     for i in range(MAX_ITER):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
-        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref)
+        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref, origin_obst)
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
     else:
         print("Iterative is max iter")
 
+
     return oa, od, ox, oy, oyaw, ov
 
 
-def linear_mpc_control(xref, xbar, x0, dref):
+def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
     """
     linear mpc control
 
@@ -258,6 +260,13 @@ def linear_mpc_control(xref, xbar, x0, dref):
     x0: initial state
     dref: reference steer angle
     """
+
+    m = []
+    for j in range(origin_obst.shape[0]):
+        m_obst = []
+        for i in range(xbar.shape[1]):
+            m_obst.append([(origin_obst[j][0]-xbar[0,i])/(origin_obst[j][1]-xbar[1,i]), 1])
+        m.append(m_obst)
 
     x = cvxpy.Variable((NX, T + 1))
     u = cvxpy.Variable((NU, T))
@@ -271,15 +280,21 @@ def linear_mpc_control(xref, xbar, x0, dref):
         if t != 0:
             cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
 
-        A, B, C = get_linear_model_matrix(
-            xbar[2, t], xbar[3, t], dref[0, t])
-        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+        A, B, C = get_linear_model_matrix(xbar[2, t], xbar[3, t], dref[0, t])
+
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C] 
 
         if t < (T - 1):
+            # pay if big difference from an input and the next: high consumption
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
-            constraints += [cvxpy.abs(u[1, t + 1] - u[1, t]) <=
-                            MAX_DSTEER * DT]
+            constraints += [cvxpy.abs(u[1, t + 1] - u[1, t]) <= MAX_DSTEER * DT]
 
+        for j in range(origin_obst.shape[0]):
+            if t < T-4 and (np.abs(origin_obst[j][1]-xbar[1,t+1]) <= 10 or np.abs(origin_obst[j][1]-xbar[1,t]) <= 10):
+                constraints += [np.sign(origin_obst[j][1]-xbar[1,t]) * (m[j][t] @ (x[:2, t+4] - origin_obst[j])) <= 0.00004]
+    
+            
+    # normal error state cost, last horizon step    
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
@@ -302,6 +317,10 @@ def linear_mpc_control(xref, xbar, x0, dref):
     else:
         print("Error: Cannot solve mpc..")
         oa, odelta, ox, oy, oyaw, ov = None, None, None, None, None, None
+
+    if oa is None or odelta is None:
+        oa = [0.0] * T
+        odelta = [0.0] * T
 
     return oa, odelta, ox, oy, oyaw, ov
 
@@ -367,14 +386,12 @@ def check_goal(state, goal, tind, nind):
 def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     """
     Simulation
-
     cx: course x position list
     cy: course y position list
     cy: course yaw position list
     ck: course curvature list
     sp: speed profile
     dl: course tick [m]
-
     """
 
     goal = [cx[-1], cy[-1]]
@@ -402,13 +419,13 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     cyaw = smooth_yaw(cyaw)
 
     while MAX_TIME >= time:
-        xref, target_ind, dref = calc_ref_trajectory(
-            state, cx, cy, cyaw, ck, sp, dl, target_ind)
+        xref, target_ind, dref = calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, target_ind)
 
-        x0 = [state.x, state.y, state.v, state.yaw]  # current state
+        x0 = [state.x, state.y, state.v, state.yaw] 
+        
+        origin_obst = np.array([[10, 2.5]])
 
-        oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(
-            xref, x0, dref, oa, odelta)
+        oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(xref, x0, dref, oa, odelta, origin_obst)
 
         if odelta is not None:
             di, ai = odelta[0], oa[0]
@@ -432,9 +449,30 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             plt.cla()
             # for stopping simulation with the esc key.
             plt.gcf().canvas.mpl_connect('key_release_event',
-                                         lambda event: [exit(0) if event.key == 'escape' else None])
+                    lambda event: [exit(0) if event.key == 'escape' else None])
             if ox is not None:
                 plt.plot(ox, oy, "xr", label="MPC")
+            
+            for j in range(origin_obst.shape[0]):
+                plt.plot(origin_obst[j][0], origin_obst[j][1], marker='o', linewidth=7)
+
+
+            obstacleList = []
+
+            for mul in range(30):
+                obstacleList.append([mul/2, -2])
+                obstacleList.append([15, mul/2])
+                obstacleList.append([mul/2, 15])
+                if mul < 27:
+                    obstacleList.append([0, 2+mul/2])
+                if mul < 20:
+                    obstacleList.append([2.5, 2.5+mul/2])
+                    obstacleList.append([7.5, 2.5+mul/2])
+                    obstacleList.append([12.5, 2.5+mul/2])
+                for obst in obstacleList:
+                    plot_circle(*obst, size=0.5, color="-b")
+
+
             plt.plot(cx, cy, "-r", label="course")
             plt.plot(x, y, "ob", label="trajectory")
             plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
@@ -452,14 +490,12 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 def do_gym_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     """
     Simulation
-
     cx: course x position list
     cy: course y position list
     cy: course yaw position list
     ck: course curvature list
     sp: speed profile
     dl: course tick [m]
-
     """
 
     state = initial_state
@@ -490,6 +526,15 @@ def do_gym_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     state = update_state(state, ai, di)
 
     return state.x, state.y, state.yaw, state.v, di, ai
+    
+
+def plot_circle(x, y, size, color="-b"):
+    deg = list(range(0, 360, 5))
+    deg.append(0)
+    xl = [x + size * math.cos(np.deg2rad(d)) for d in deg]
+    yl = [y + size * math.sin(np.deg2rad(d)) for d in deg]
+    plt.fill(xl, yl, "c")
+    plt.plot(xl, yl, color)
 
 
 def calc_speed_profile(cx, cy, cyaw, target_speed):
@@ -537,44 +582,6 @@ def smooth_yaw(yaw):
     return yaw
 
 
-def get_straight_course(dl):
-    ax = [0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0]
-    ay = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
-
-    return cx, cy, cyaw, ck
-
-
-def get_straight_course2(dl):
-    ax = [0.0, -10.0, -20.0, -40.0, -50.0, -60.0, -70.0]
-    ay = [0.0, -1.0, 1.0, 0.0, -1.0, 1.0, 0.0]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
-
-    return cx, cy, cyaw, ck
-
-
-def get_straight_course3(dl):
-    ax = [0.0, -10.0, -20.0, -40.0, -50.0, -60.0, -70.0]
-    ay = [0.0, -1.0, 1.0, 0.0, -1.0, 1.0, 0.0]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
-
-    cyaw = [i - math.pi for i in cyaw]
-
-    return cx, cy, cyaw, ck
-
-
-def get_forward_course(dl):
-    ax = [0.0, 60.0, 125.0, 50.0, 75.0, 30.0, -10.0]
-    ay = [0.0, 0.0, 50.0, 65.0, 30.0, 50.0, -20.0]
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
-
-    return cx, cy, cyaw, ck
-
-
 def get_switch_back_course(dl):
     ax = [0.0, 30.0, 6.0, 20.0, 35.0]
     ay = [0.0, 0.0, 20.0, 35.0, 20.0]
@@ -592,23 +599,17 @@ def get_switch_back_course(dl):
 
     return cx, cy, cyaw, ck
 
-
 def get_rrt_course(dl):
     ax, ay = rrt_star.main()
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
-        ax, ay, ds=dl)
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
 
     return cx, cy, cyaw, ck
-
 
 def main():
     print(__file__ + " start!!")
 
     dl = 1.0  # course tick
-    # cx, cy, cyaw, ck = get_straight_course(dl)
-    # cx, cy, cyaw, ck = get_straight_course2(dl)
-    # cx, cy, cyaw, ck = get_straight_course3(dl)
-    # cx, cy, cyaw, ck = get_forward_course(dl)
+
     # cx, cy, cyaw, ck = get_switch_back_course(dl)
     cx, cy, cyaw, ck = get_rrt_course(dl)
 
@@ -616,8 +617,7 @@ def main():
 
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
 
-    t, x, y, yaw, v, d, a = do_simulation(
-        cx, cy, cyaw, ck, sp, dl, initial_state)
+    t, x, y, yaw, v, d, a = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state)
 
     if show_animation:  # pragma: no cover
         plt.close("all")
@@ -637,43 +637,9 @@ def main():
         plt.ylabel("Speed [kmh]")
 
         plt.show()
-
+    
     return a, d
-
-
-def main2():
-    print(__file__ + " start!!")
-
-    dl = 1.0  # course tick
-    cx, cy, cyaw, ck = get_straight_course3(dl)
-
-    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
-
-    initial_state = State(x=cx[0], y=cy[0], yaw=0.0, v=0.0)
-
-    t, x, y, yaw, v, d, a = do_simulation(
-        cx, cy, cyaw, ck, sp, dl, initial_state)
-
-    if show_animation:  # pragma: no cover
-        plt.close("all")
-        plt.subplots()
-        plt.plot(cx, cy, "-r", label="spline")
-        plt.plot(x, y, "-g", label="tracking")
-        plt.grid(True)
-        plt.axis("equal")
-        plt.xlabel("x[m]")
-        plt.ylabel("y[m]")
-        plt.legend()
-
-        plt.subplots()
-        plt.plot(t, v, "-r", label="speed")
-        plt.grid(True)
-        plt.xlabel("Time [s]")
-        plt.ylabel("Speed [kmh]")
-
-        plt.show()
 
 
 if __name__ == '__main__':
     main()
-    # main2()
