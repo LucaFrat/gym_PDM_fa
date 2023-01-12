@@ -26,7 +26,7 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     x_gym = np.zeros(4)
 
     x = y = yaw = v = 0
-    a = d = d_prev = 0
+    a = d = yaw_prev = 0
 
     dl = 1.0  # course tick
     cx, cy, cyaw, ck = mpc.get_rrt_course(dl)
@@ -38,23 +38,23 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
         x_gym[2] += a * mpc.DT / DT * np.tan(d) / mpc.WB * mpc.DT
         x_gym[3] = ob['robot_0']['joint_state']['forward_velocity'][0]
 
-        # state = mpc.State(x, y, yaw, v)
+        state = mpc.State(x, y, yaw, v)
         state = mpc.State(*x_gym)
 
         x, y, yaw, v, d, a = mpc.do_gym_simulation(
             cx, cy, cyaw, ck, sp, dl, state)
 
-        print("gym state: ", x_gym)
-        print("mpc state: ", [x, y, yaw, v])
+        print("->Gym state: ", x_gym,
+              ob['robot_0']['joint_state']['steering'])
+        print("->MPC state: ", [x, y, yaw, v, d])
 
-        vel = np.array(a) * mpc.DT
-        yr = (d - d_prev) / mpc.DT
-        d_prev = d
+        yr = np.clip((yaw - yaw_prev) / mpc.DT, -mpc.MAX_DSTEER, mpc.MAX_STEER)
+        yaw_prev = yaw
 
-        print("actions: ", [vel, yr])
+        print("=>Actions: ", v, yr)
 
         for _ in range(int(mpc.DT / DT)):
-            ob, _, _, _ = env.step([vel, yr])
+            ob, _, _, _ = env.step([v, yr])
 
         history.append(ob)
 

@@ -218,14 +218,30 @@ def main():
     print("Start rrt star with dubins planning")
 
     # ====Search Path with RRT====
-    obstacleList = [
-        (5, 5, 1),
-        (3, 6, 2),
-        (3, 8, 2),
-        (3, 10, 2),
-        (7, 5, 2),
-        (9, 5, 2)
-    ]  # [x,y,size(radius)]
+    # obstacleList = []
+    bl = 0
+    obstacleList = [(100, 100, 0)]*200
+    for x in range(0, 27, 1):
+        obstacleList[bl] = (0, 2+x/2, 0.5)
+        bl = bl+1
+    for x in range(0, 30, 1):
+        obstacleList[bl] = (x/2, -2, 0.5)
+        bl = bl+1
+    for x in range(0, 30, 1):
+        obstacleList[bl] = (15, x/2, 0.5)
+        bl = bl+1
+    for x in range(0, 30, 1):
+        obstacleList[bl] = (x/2, 15, 0.5)
+        bl = bl+1
+    for x in range(0, 20, 1):
+        obstacleList[bl] = (2.5, 2.5+x/2, 0.5)
+        bl = bl+1
+    for x in range(0, 20, 1):
+        obstacleList[bl] = (7.5, 2.5+x/2, 0.5)
+        bl = bl+1
+    for x in range(0, 20, 1):
+        obstacleList[bl] = (12.5, 2.5+x/2, 0.5)
+        bl = bl+1
 
     # Set Initial parameters
     start = [0.0, 0.0, np.deg2rad(0.0)]
