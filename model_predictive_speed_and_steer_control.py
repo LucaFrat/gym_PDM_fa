@@ -21,7 +21,8 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 5  # horizon length
+DT = 0.2  # [s] time tick
+T = int(2 / DT)  # [s] horizon length
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
@@ -39,7 +40,6 @@ DU_TH = 0.1  # iteration finish param
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
-DT = 0.2  # [s] time tick
 
 # Vehicle parameters
 LENGTH = 4.5  # [m]
@@ -449,6 +449,49 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     return t, x, y, yaw, v, d, a
 
 
+def do_gym_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
+    """
+    Simulation
+
+    cx: course x position list
+    cy: course y position list
+    cy: course yaw position list
+    ck: course curvature list
+    sp: speed profile
+    dl: course tick [m]
+
+    """
+
+    state = initial_state
+
+    # initial yaw compensation
+    if state.yaw - cyaw[0] >= math.pi:
+        state.yaw -= math.pi * 2.0
+    elif state.yaw - cyaw[0] <= -math.pi:
+        state.yaw += math.pi * 2.0
+
+    target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
+
+    odelta, oa = None, None
+
+    cyaw = smooth_yaw(cyaw)
+
+    xref, target_ind, dref = calc_ref_trajectory(
+        state, cx, cy, cyaw, ck, sp, dl, target_ind)
+
+    x0 = [state.x, state.y, state.v, state.yaw]  # current state
+
+    oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(
+        xref, x0, dref, oa, odelta)
+
+    if odelta is not None:
+        di, ai = odelta[0], oa[0]
+
+    state = update_state(state, ai, di)
+
+    return state.x, state.y, state.yaw, state.v, di, ai
+
+
 def calc_speed_profile(cx, cy, cyaw, target_speed):
 
     speed_profile = [target_speed] * len(cx)
@@ -533,11 +576,25 @@ def get_forward_course(dl):
 
 
 def get_switch_back_course(dl):
+    ax = [0.0, 30.0, 6.0, 20.0, 35.0]
+    ay = [0.0, 0.0, 20.0, 35.0, 20.0]
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
+    ax = [35.0, 10.0, 0.0, 0.0]
+    ay = [20.0, 30.0, 5.0, 0.0]
+    cx2, cy2, cyaw2, ck2, s2 = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
+    cyaw2 = [i - math.pi for i in cyaw2]
+    cx.extend(cx2)
+    cy.extend(cy2)
+    cyaw.extend(cyaw2)
+    ck.extend(ck2)
+
+    return cx, cy, cyaw, ck
+
+
+def get_rrt_course(dl):
     ax, ay = rrt_star.main()
-    print("ax: ", ax)
-    print("ay: ", ay)
-    # ax = [0.0, 30.0, 6.0, 20.0, 35.0]
-    # ay = [0.0, 0.0, 20.0, 35.0, 20.0]
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
         ax, ay, ds=dl)
 
@@ -552,7 +609,8 @@ def main():
     # cx, cy, cyaw, ck = get_straight_course2(dl)
     # cx, cy, cyaw, ck = get_straight_course3(dl)
     # cx, cy, cyaw, ck = get_forward_course(dl)
-    cx, cy, cyaw, ck = get_switch_back_course(dl)
+    # cx, cy, cyaw, ck = get_switch_back_course(dl)
+    cx, cy, cyaw, ck = get_rrt_course(dl)
 
     sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
 
@@ -579,6 +637,8 @@ def main():
         plt.ylabel("Speed [kmh]")
 
         plt.show()
+
+    return a, d
 
 
 def main2():

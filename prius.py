@@ -1,11 +1,10 @@
 import gym
 import numpy as np
-from MotionPlanningGoal.dynamicSubGoal import DynamicSubGoal
 
-import mpc
+import model_predictive_speed_and_steer_control as mpc
 from urdfenvs.robots.prius import Prius
 
-DT = 0.01
+DT = mpc.DT / 5
 
 
 def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
@@ -14,7 +13,7 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     ]
     env = gym.make(
         "urdf-env-v0",
-        dt=mpc.DT,
+        dt=DT,
         robots=robots,
         render=render
     )
@@ -24,51 +23,38 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
 
     history = []
 
-    splineGoalDict = {
-        "weight": 1.0,
-        "is_primary_goal": True,
-        'indices': [0, 1, 2],
-        'parent_link': 0,
-        'child_link': 3,
-        'trajectory': {
-            'degree': 2,
-            'controlPoints': [
-                [8.0, 8.0, 0.0],
-                [8.0, 8.0, 0.0],
-                [8.0, 8.0, 0.0]],
-            'duration': 10},
-        'epsilon': 0.08,
-        'type': "splineSubGoal",
-    }
-    splineGoal = DynamicSubGoal(name="goal3", content_dict=splineGoalDict)
-    env.add_goal(splineGoal)
+    x_gym = np.zeros(4)
 
-    x = np.zeros(4)
+    x = y = yaw = v = 0
+    a = d = d_prev = 0
 
-    actions = np.array([[0, 0]] * mpc.T)
-
-    # goal state
-    xref = np.array([8.0, 8.0, 1.0, -0.5])
+    dl = 1.0  # course tick
+    cx, cy, cyaw, ck = mpc.get_rrt_course(dl)
+    sp = mpc.calc_speed_profile(cx, cy, cyaw, mpc.TARGET_SPEED)
 
     for i in range(n_steps):
-        x[0] = ob['robot_0']['joint_state']['position'][0]
-        x[1] = ob['robot_0']['joint_state']['position'][1]
-        x[2] += actions[0, 0] * mpc.DT / DT * \
-            np.tan(x[3]) / mpc.WB * mpc.DT
-        x[3] = ob['robot_0']['joint_state']['steering']
-        print("state: ", x)
+        x_gym[0] = ob['robot_0']['joint_state']['position'][0]
+        x_gym[1] = ob['robot_0']['joint_state']['position'][1]
+        x_gym[2] += a * mpc.DT / DT * np.tan(d) / mpc.WB * mpc.DT
+        x_gym[3] = ob['robot_0']['joint_state']['forward_velocity'][0]
 
-        actions = np.array(mpc.iterative_linear_mpc_control(
-            x,
-            xref,
-            actions[:, 0],
-            actions[:, 1])
-        ).T
+        # state = mpc.State(x, y, yaw, v)
+        state = mpc.State(*x_gym)
 
-        print("actions: ", actions[0, :])
+        x, y, yaw, v, d, a = mpc.do_gym_simulation(
+            cx, cy, cyaw, ck, sp, dl, state)
+
+        print("gym state: ", x_gym)
+        print("mpc state: ", [x, y, yaw, v])
+
+        vel = np.array(a) * mpc.DT
+        yr = (d - d_prev) / mpc.DT
+        d_prev = d
+
+        print("actions: ", [vel, yr])
 
         for _ in range(int(mpc.DT / DT)):
-            ob, _, _, _ = env.step(actions[0])
+            ob, _, _, _ = env.step([vel, yr])
 
         history.append(ob)
 

@@ -20,7 +20,7 @@ from utils.plot import plot_arrow
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))  # root dir
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
-show_animation = True
+show_animation = False
 
 
 class RRTStarDubins(RRTStar):
@@ -235,12 +235,11 @@ def main():
         start, goal, rand_area=[-2.0, 15.0], obstacle_list=obstacleList)
     path = rrtstar_dubins.planning(animation=show_animation)
 
-    x = np.flip(np.array(path)[:, 0])
-    y = np.flip(np.array(path)[:, 1])
+    x = np.flip(np.array(path)[1:-1, 0])
+    y = np.flip(np.array(path)[1:-1, 1])
 
     y = y[np.diff(np.hstack((x, np.inf))) != 0]
     x = x[np.diff(np.hstack((x, np.inf))) != 0]
-    return x, y
 
     # Draw final path
     if show_animation:  # pragma: no cover
@@ -250,6 +249,8 @@ def main():
         plt.pause(0.001)
 
         plt.show()
+
+    return x, y
 
 
 if __name__ == '__main__':
