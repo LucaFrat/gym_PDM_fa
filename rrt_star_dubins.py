@@ -40,7 +40,7 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=200,
+                 max_iter=100,
                  connect_circle_dist=50.0,
                  robot_radius=0.0,
                  ):
@@ -218,30 +218,30 @@ def main():
     print("Start rrt star with dubins planning")
 
     # ====Search Path with RRT====
-    # obstacleList = []
-    bl = 0
-    obstacleList = [(100, 100, 0)]*200
-    for x in range(0, 27, 1):
-        obstacleList[bl] = (0, 2+x/2, 0.5)
-        bl = bl+1
-    for x in range(0, 30, 1):
-        obstacleList[bl] = (x/2, -2, 0.5)
-        bl = bl+1
-    for x in range(0, 30, 1):
-        obstacleList[bl] = (15, x/2, 0.5)
-        bl = bl+1
-    for x in range(0, 30, 1):
-        obstacleList[bl] = (x/2, 15, 0.5)
-        bl = bl+1
-    for x in range(0, 20, 1):
-        obstacleList[bl] = (2.5, 2.5+x/2, 0.5)
-        bl = bl+1
-    for x in range(0, 20, 1):
-        obstacleList[bl] = (7.5, 2.5+x/2, 0.5)
-        bl = bl+1
-    for x in range(0, 20, 1):
-        obstacleList[bl] = (12.5, 2.5+x/2, 0.5)
-        bl = bl+1
+    obstacleList = []
+    # bl = 0
+    # obstacleList = [(100, 100, 0)]*200
+    # for x in range(0, 27, 1):
+    #     obstacleList[bl] = (0, 2+x/2, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 30, 1):
+    #     obstacleList[bl] = (x/2, -2, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 30, 1):
+    #     obstacleList[bl] = (15, x/2, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 30, 1):
+    #     obstacleList[bl] = (x/2, 15, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 20, 1):
+    #     obstacleList[bl] = (2.5, 2.5+x/2, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 20, 1):
+    #     obstacleList[bl] = (7.5, 2.5+x/2, 0.5)
+    #     bl = bl+1
+    # for x in range(0, 20, 1):
+    #     obstacleList[bl] = (12.5, 2.5+x/2, 0.5)
+    #     bl = bl+1
 
     # Set Initial parameters
     start = [0.0, 0.0, np.deg2rad(0.0)]
@@ -250,6 +250,7 @@ def main():
     rrtstar_dubins = RRTStarDubins(
         start, goal, rand_area=[-2.0, 15.0], obstacle_list=obstacleList)
     path = rrtstar_dubins.planning(animation=show_animation)
+    # print(path)
 
     x = np.flip(np.array(path)[1:-1, 0])
     y = np.flip(np.array(path)[1:-1, 1])

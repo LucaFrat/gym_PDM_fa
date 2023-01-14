@@ -32,13 +32,20 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
     cx, cy, cyaw, ck = mpc.get_rrt_course(dl)
     sp = mpc.calc_speed_profile(cx, cy, cyaw, mpc.TARGET_SPEED)
 
+    goal1Dict = {
+        "weight": 1.0, "is_primary_goal": True, 'indices': [0, 1, 2], 'parent_link': 0, 'child_link': 3,
+        'desired_position': [1, 0, 0.1], 'epsilon': 0.02, 'type': "staticSubGoal",
+    }
+
+    goal1 = StaticSubGoal(name="goal1", content_dict=goal1Dict)
+
     for i in range(n_steps):
         x_gym[0] = ob['robot_0']['joint_state']['position'][0]
         x_gym[1] = ob['robot_0']['joint_state']['position'][1]
         x_gym[2] += a * mpc.DT / DT * np.tan(d) / mpc.WB * mpc.DT
         x_gym[3] = ob['robot_0']['joint_state']['forward_velocity'][0]
 
-        state = mpc.State(x, y, yaw, v)
+        # state = mpc.State(x, y, yaw, v)
         state = mpc.State(*x_gym)
 
         x, y, yaw, v, d, a = mpc.do_gym_simulation(
@@ -46,10 +53,12 @@ def run_prius(n_steps=10000, render=False, goal=True, obstacles=True):
 
         print("->Gym state: ", x_gym,
               ob['robot_0']['joint_state']['steering'])
-        print("->MPC state: ", [x, y, yaw, v, d])
+        print("->MPC state: ", [x, y, yaw, v], [d])
 
-        yr = np.clip((yaw - yaw_prev) / mpc.DT, -mpc.MAX_DSTEER, mpc.MAX_STEER)
-        yaw_prev = yaw
+        # yr = np.clip((yaw - yaw_prev) / mpc.DT, -mpc.MAX_DSTEER, mpc.MAX_STEER)
+        # yaw_prev = yaw
+        # TODO: β ???
+        yr = np.clip(v * np.tan(d) / mpc.WB, -mpc.MAX_DSTEER, mpc.MAX_STEER)
 
         print("=>Actions: ", v, yr)
 
