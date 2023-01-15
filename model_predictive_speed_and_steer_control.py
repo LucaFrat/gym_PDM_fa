@@ -444,9 +444,8 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     cyaw = smooth_yaw(cyaw)
 
-    obstacleList = environ(show_animation=False)
+    obstacleList = environ()
 
-    fig, ax = plt.subplots()
     while MAX_TIME >= time:
         xref, target_ind, dref = calc_ref_trajectory(
             state, cx, cy, cyaw, ck, sp, dl, target_ind)
@@ -478,7 +477,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         if show_animation:
 
-            plt.clf()
+            plt.cla()
             # for stopping simulation with the esc key.
             plt.gcf().canvas.mpl_connect(
                 'key_release_event',
@@ -487,8 +486,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
                 plt.plot(ox, oy, "xr", label="MPC")
 
             for obst in obstacleList:
-                ax.add_patch(mpl.patches.Circle(
-                    (obst[0], obst[1]), radius=obst[2], fill=True))
+                plot_circle(*obst)
 
             for j in range(origin_obst.shape[0]):
                 plt.plot(origin_obst[j][0],

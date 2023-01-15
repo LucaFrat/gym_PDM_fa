@@ -81,4 +81,4 @@ def environ(show_animation=False):
 
 
 if __name__ == 'main':
-    _ = environ()
+    environ()

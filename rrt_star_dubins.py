@@ -41,7 +41,7 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=50,
+                 max_iter=250,
                  connect_circle_dist=50.0,
                  robot_radius=0.0,
                  ):
@@ -226,7 +226,7 @@ def main():
 
     # Set Initial parameters
     start = [6.0, 0.0, np.deg2rad(0.0)]
-    goal = [8.0, 2.0, np.deg2rad(0.0)]
+    goal = [-12.0, 8.0, np.deg2rad(0.0)]
 
     rrtstar_dubins = RRTStarDubins(
         start, goal, rand_area=[-36.0, 36.0], obstacle_list=obstacleList)
