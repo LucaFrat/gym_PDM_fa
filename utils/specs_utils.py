@@ -4,12 +4,12 @@ NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
 
 DT = 0.2  # [s] time tick
-T = int(2/DT)  # horizon length
+T = int(3.0/DT)  # horizon length
 
 # mpc parameters
-R = np.diag([0.5, 0.5])  # input cost matrix
-Rd = np.diag([0.2, 0.2])  # input difference cost matrix
-Q = np.diag([0.01, 0.01, 1, 0.1])  # state cost matrix
+R = np.diag([1, 0.01])  # input cost matrix
+Rd = np.diag([0.3, 0.01])  # input difference cost matrix
+Q = np.diag([0.1, 0.1, 0.05, 0.1])  # state cost matrix
 Qf = Q  # state final matrix
 
 GOAL_DIS = 1.5  # goal distance
@@ -21,7 +21,7 @@ MAX_ITER = 3  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
+N_IND_SEARCH = 15  # Search index number
 
 
 # Vehicle parameters

@@ -41,7 +41,7 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=100,
+                 max_iter=500,
                  connect_circle_dist=500.0,
                  robot_radius=0.0,
                  ):
@@ -242,13 +242,13 @@ def main():
     y = y[np.diff(np.hstack((y, np.inf))) != 0]
 
     # Draw final path
-    # if show_animation:  # pragma: no cover
-    #     rrtstar_dubins.draw_graph()
-    #     plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
-    #     plt.grid(True)
-    #     plt.pause(0.001)
+    if show_animation:  # pragma: no cover
+        rrtstar_dubins.draw_graph()
+        plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
+        plt.grid(True)
+        plt.pause(0.001)
     #
-    #     plt.show()
+        plt.show()
 
     return x, y
 

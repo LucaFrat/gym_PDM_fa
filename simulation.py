@@ -73,8 +73,8 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         x0 = [state.x, state.y, state.v, state.yaw]
 
-        origin_obst = np.array([[8+x_inc, 20-y_inc], [-10+x_inc, -20+y_inc],
-                               [-20-x_inc, 20-y_inc], [12-x_inc, -30+2*y_inc]])
+        origin_obst = np.array([[8+2*x_inc, 20-y_inc], [-10+x_inc, -20+1.8*y_inc],
+                               [-20-1.1*x_inc, 20-0.9*y_inc], [12+x_inc, -30+1.5*y_inc]])
         x_inc -= 0.1
         y_inc += 0.2
 
