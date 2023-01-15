@@ -65,6 +65,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     cyaw = trajectory.smooth_yaw(cyaw)
 
     obstacleList = environ()
+    x_inc, y_inc = 0.0, 0.0
 
     while specs.MAX_TIME >= time:
         xref, target_ind, dref = trajectory.calc_ref_trajectory(
@@ -72,7 +73,9 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         x0 = [state.x, state.y, state.v, state.yaw]
 
-        origin_obst = np.array([[10, 2.5]])
+        origin_obst = np.array([[8, 20], [-10+x_inc, -20+y_inc], [-20-x_inc, 20-y_inc], [12-x_inc, -30+2*y_inc]])
+        x_inc -= 0.1
+        y_inc += 0.2
 
         oa, odelta, ox, oy, _, _ = mpc.iterative_linear_mpc_control(
             xref, x0, dref, oa, odelta, origin_obst)
@@ -106,7 +109,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
                 plt.plot(ox, oy, "xr", label="MPC")
 
             for obst in obstacleList:
-                plot.plot_circle(*obst)
+                plot.plot_env(*obst)
 
             for j in range(origin_obst.shape[0]):
                 plt.plot(origin_obst[j][0],
