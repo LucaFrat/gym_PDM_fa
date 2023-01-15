@@ -50,6 +50,17 @@ class State:
 
 
 def get_linear_model_matrix(yaw, steering):
+    """
+    - State variables
+    x: position along the X axis
+    y: position along the Y axis
+    yaw: rotation around the vehicle's CoG
+    steering: the front wheels' steering angle
+
+    - Input variables
+    v: forward velocity
+    yaw_rate: rate of rotation around CoG
+    """
 
     A = np.zeros((NX, NX))
     A[0, 0] = 1.0
@@ -89,12 +100,19 @@ def get_nparray_from_matrix(x):
     return np.array(x).flatten()
 
 
-def linear_mpc_control(x0, xref, velocities, yaw_rates):
+def linear_mpc_control(x0, xref, curr_velocities, curr_yaw_rates):
     """
     linear mpc control
 
-    xref: reference point
-    x: initial state
+    x0: initial state
+    xref: reference state
+    curr_velocities: sequence of presently intended velocity control commands
+    curr_yaw_rates: sequence of presently intended yaw rate control commands
+
+    xbar: operating point
+
+    u_velocities: generated sequence of velocities for this horizon by MPC
+    u_yaw_rates: generated sequence of yaw rates for this horizon by MPC
     """
 
     x = cp.Variable((NX, T + 1))
@@ -103,18 +121,13 @@ def linear_mpc_control(x0, xref, velocities, yaw_rates):
     cost = 0.0
     constraints = []
 
-    xbar = predict_motion(x0, velocities, yaw_rates)
+    xbar = predict_motion(x0, curr_velocities, curr_yaw_rates)
 
     for t in range(T):
         cost += cp.quad_form(u[:, t], R)
 
         if t != 0:
             cost += cp.quad_form(xref - x[:, t], Q)
-
-        # constraints += [x[0, t + 1] == x[0, t] + u[0, t] * DT]
-        # constraints += [x[1, t + 1] == x[1, t] + x[2, t] * u[0, t] * DT]
-        # constraints += [x[2, t + 1] == x[2, t] + x[3, t] / (1 - x[3, t] ** 2 / 2) / WB * u[0, t] * DT]
-        # constraints += [x[3, t + 1] == x[3, t] + u[1, t] * DT]
 
         A, B = get_linear_model_matrix(*xbar[2:, t])
 
@@ -139,12 +152,12 @@ def linear_mpc_control(x0, xref, velocities, yaw_rates):
     prob = cp.Problem(cp.Minimize(cost), constraints)
     prob.solve(solver=cp.ECOS, verbose=False)
 
-    velocity = yaw_rate = 0
+    velocities = yaw_rates = 0
     if prob.status == cp.OPTIMAL or prob.status == cp.OPTIMAL_INACCURATE:
-        velocity = get_nparray_from_matrix(u.value[0, :])
-        yaw_rate = get_nparray_from_matrix(u.value[1, :])
+        velocities = get_nparray_from_matrix(u.value[0, :])
+        yaw_rates = get_nparray_from_matrix(u.value[1, :])
 
-    return velocity, yaw_rate
+    return velocities, yaw_rates
 
 
 def iterative_linear_mpc_control(x0, xref, velocities, yaw_rates):
@@ -156,7 +169,7 @@ def iterative_linear_mpc_control(x0, xref, velocities, yaw_rates):
         velocities = yaw_rates = [0.0] * T
 
     for _ in range(MAX_ITER):
-        prev_velocities, prev_yaw_rates = velocities[:], yaw_rates[:]
+        prev_velocities, prev_yaw_rates = velocities, yaw_rates
         velocities, yaw_rates = linear_mpc_control(
             x0, xref, velocities, yaw_rates)
         du = sum(abs(velocities - prev_velocities)) + \
