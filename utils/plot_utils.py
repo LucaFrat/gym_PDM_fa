@@ -82,11 +82,26 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):
     plt.plot(x, y, "*")
 
 
-def plot_circle(x, y, radius, color="-b"):
+def plot_env(x, y, radius, color="-b"):
     xl = []
     yl = []
     for rad in np.linspace(0, math.pi*2, 60):
-        xl.append(x + radius * math.cos(rad))
-        yl.append(y + radius * math.sin(rad))
+        xl.append(x +radius *math.cos(rad))
+        yl.append(y +radius *math.sin(rad)) 
+    xs_in = np.array([[-0.5, 0.5, 0.5, -0.5, -0.5],
+                     [-39, -38, -38, -39, -39],
+                     [38, 39, 39, 38, 38],
+                     [-39, 39, 39, -39, -39],
+                     [-39, 39, 39, -39, -39]])
+    ys_in = np.array([[-25, -25, 25, 25, -25],
+                     [-29, -29, 39, 39, -29],
+                     [-38, -38, 29, 29, -38],
+                     [38, 38, 39, 39, 38],
+                     [-39, -39, -38, -38, -39]])
+    for (x, y) in zip(xs_in[1:], ys_in[1:]):
+        plt.plot(x, y, color="red", ls="-")
     plt.fill(xl, yl, "c")
     plt.plot(xl, yl, color)
+    plt.plot(xs_in[0], ys_in[0], color="red", ls="-")
+    plt.plot(xs_in[0]+26, ys_in[0], color="red", ls="-")
+    plt.plot(xs_in[0]-26, ys_in[0], color="red", ls="-")
