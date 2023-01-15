@@ -1,7 +1,6 @@
 """
 
-Path tracking simulation with iterative linear model predictive control for
-speed and steer control
+Path tracking simulation with iterative linear model predictive control for speed and steer control
 
 author: Atsushi Sakai (@Atsushi_twi)
 
@@ -18,6 +17,7 @@ import numpy as np
 import cubic_spline_planner
 import rrt_star_dubins as rrt_star
 from environ_obstacles import environ
+
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
@@ -78,10 +78,10 @@ class State:
 
 
 def pi_2_pi(angle):
-    while angle > math.pi:
+    while(angle > math.pi):
         angle = angle - 2.0 * math.pi
 
-    while angle < -math.pi:
+    while(angle < -math.pi):
         angle = angle + 2.0 * math.pi
 
     return angle
@@ -112,29 +112,13 @@ def get_linear_model_matrix(v, phi, delta):
     return A, B, C
 
 
-def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):
+def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: no cover
 
-    outline = np.array([[-BACKTOWHEEL,
-                         (LENGTH - BACKTOWHEEL),
-                         (LENGTH - BACKTOWHEEL),
-                         -BACKTOWHEEL,
-                         -BACKTOWHEEL],
-                        [WIDTH / 2,
-                         WIDTH / 2,
-                         -WIDTH / 2,
-                         -WIDTH / 2,
-                         WIDTH / 2]])
+    outline = np.array([[-BACKTOWHEEL, (LENGTH - BACKTOWHEEL), (LENGTH - BACKTOWHEEL), -BACKTOWHEEL, -BACKTOWHEEL],
+                        [WIDTH / 2, WIDTH / 2, - WIDTH / 2, -WIDTH / 2, WIDTH / 2]])
 
-    fr_wheel = np.array([[WHEEL_LEN,
-                          -WHEEL_LEN,
-                          -WHEEL_LEN,
-                          WHEEL_LEN,
-                          WHEEL_LEN],
-                         [-WHEEL_WIDTH - TREAD,
-                          -WHEEL_WIDTH - TREAD,
-                          WHEEL_WIDTH - TREAD,
-                          WHEEL_WIDTH - TREAD,
-                          -WHEEL_WIDTH - TREAD]])
+    fr_wheel = np.array([[WHEEL_LEN, -WHEEL_LEN, -WHEEL_LEN, WHEEL_LEN, WHEEL_LEN],
+                         [-WHEEL_WIDTH - TREAD, -WHEEL_WIDTH - TREAD, WHEEL_WIDTH - TREAD, WHEEL_WIDTH - TREAD, -WHEEL_WIDTH - TREAD]])
 
     rr_wheel = np.copy(fr_wheel)
 
@@ -260,8 +244,7 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od, origin_obst):
     for i in range(MAX_ITER):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
-        oa, od, ox, oy, oyaw, ov = linear_mpc_control(
-            xref, xbar, x0, dref, origin_obst)
+        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref, origin_obst)
 
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
@@ -307,7 +290,7 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
         if t < T - 1:
-            # penalize differences between successive inputs: high consumption
+            # pay if big difference from an input and the next: high consumption
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
             constraints += [cvxpy.abs(u[1, t + 1] - u[1, t])
                             <= MAX_DSTEER * DT]
@@ -317,8 +300,7 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
                 and (np.abs(origin_obst[j][1]-xbar[1, t+1]) <= 10
                      or np.abs(origin_obst[j][1]-xbar[1, t]) <= 10):
                 constraints += [np.sign(origin_obst[j][1]-xbar[1, t])
-                                * (m[j][t] @ (x[:2, t+4] - origin_obst[j]))
-                                <= 0.00004]
+                                * (m[j][t] @ (x[:2, t+4] - origin_obst[j])) <= 0.00004]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
@@ -444,6 +426,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     cyaw = smooth_yaw(cyaw)
 
+
     obstacleList = environ()
 
     while MAX_TIME >= time:
@@ -455,7 +438,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         origin_obst = np.array([[10, 2.5]])
 
         oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(
-            xref, x0, dref, oa, odelta, origin_obst)
+                xref, x0, dref, oa, odelta, origin_obst)
 
         if odelta is not None:
             di, ai = odelta[0], oa[0]
@@ -475,24 +458,21 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             print("Goal")
             break
 
-        if show_animation:
+        if show_animation:  # pragma: no cover
 
             plt.cla()
             # for stopping simulation with the esc key.
-            plt.gcf().canvas.mpl_connect(
-                'key_release_event',
-                lambda event: [exit(0) if event.key == 'escape' else None])
+            plt.gcf().canvas.mpl_connect('key_release_event',
+                                         lambda event: [exit(0) if event.key == 'escape' else None])
             if ox is not None:
                 plt.plot(ox, oy, "xr", label="MPC")
 
             for obst in obstacleList:
                 plot_circle(*obst)
-
+            
             for j in range(origin_obst.shape[0]):
-                plt.plot(origin_obst[j][0],
-                         origin_obst[j][1],
-                         marker='o',
-                         linewidth=7)
+                plt.plot(origin_obst[j][0], origin_obst[j]
+                         [1], marker='o', linewidth=7)
 
             plt.plot(cx, cy, "-r", label="course")
             plt.plot(x, y, "ob", label="trajectory")
@@ -509,11 +489,13 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     return t, x, y, yaw, v, d, a
 
 
-def plot_circle(x, y, size, color="-b"):
-    deg = list(range(0, 360, 5))
-    deg.append(0)
-    xl = [x + size * math.cos(np.deg2rad(d)) for d in deg]
-    yl = [y + size * math.sin(np.deg2rad(d)) for d in deg]
+
+def plot_circle(x, y, radius, color="-b"):
+    xl = []
+    yl = []
+    for rad in np.linspace(0, math.pi*2, 60):
+        xl.append(x +radius *math.cos(rad))
+        yl.append(y +radius *math.sin(rad)) 
     plt.fill(xl, yl, "c")
     plt.plot(xl, yl, color)
 
@@ -563,6 +545,24 @@ def smooth_yaw(yaw):
     return yaw
 
 
+def get_switch_back_course(dl):
+    ax = [0.0, 30.0, 6.0, 20.0, 35.0]
+    ay = [0.0, 0.0, 20.0, 35.0, 20.0]
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
+    ax = [35.0, 10.0, 0.0, 0.0]
+    ay = [20.0, 30.0, 5.0, 0.0]
+    cx2, cy2, cyaw2, ck2, s2 = cubic_spline_planner.calc_spline_course(
+        ax, ay, ds=dl)
+    cyaw2 = [i - math.pi for i in cyaw2]
+    cx.extend(cx2)
+    cy.extend(cy2)
+    cyaw.extend(cyaw2)
+    ck.extend(ck2)
+
+    return cx, cy, cyaw, ck
+
+
 def get_rrt_course(dl):
     ax, ay = rrt_star.main()
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
@@ -586,7 +586,7 @@ def main():
     t, x, y, yaw, v, d, a = do_simulation(
         cx, cy, cyaw, ck, sp, dl, initial_state)
 
-    if show_animation:
+    if show_animation:  # pragma: no cover
         plt.close("all")
         plt.plot(cx, cy, "-r", label="spline")
         plt.plot(x, y, "-g", label="tracking")
