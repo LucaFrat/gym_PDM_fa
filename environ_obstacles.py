@@ -8,16 +8,16 @@ def environ(show_animation=False):
     ax = fig.add_subplot(111)
 
     obstacleList = []
-    h_inline = 50
+    h_inline = 40
     thick = 1
     h_perimeter = 78
     h_open = 10
     radi = 3
     obst_color = 'red'
 
-    rett_points = [(-thick/2, -h_inline/2),  # V
-                   (-3*thick/2-h_inline/2, -h_inline/2),  # V
-                   (+thick/2+h_inline/2, -h_inline/2),  # V
+    rett_points = [(-thick/2, -h_inline/2 + 2.5),  # V
+                   (-3*thick/2-h_inline/2 - 5, -h_inline/2 + 2.5),  # V
+                   (+thick/2+h_inline/2 + 5, -h_inline/2 + 2.5),  # V
                    (-h_perimeter/2, -h_perimeter/2+h_open),  # V
                    (h_perimeter/2-thick, -h_perimeter/2),  # V
                    (-h_perimeter/2, h_perimeter/2-thick),  # O

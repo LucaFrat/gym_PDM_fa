@@ -159,7 +159,7 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
                      or np.abs(origin_obst[j][1]-xbar[1, t]) <= 10):
                 constraints += [np.sign(origin_obst[j][1]-xbar[1, t])
                                 * (m[j][t] @ (x[:2, t+4] - origin_obst[j]))
-                                <= 0.00004]
+                                <= 0.0000005]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, specs.T] - x[:, specs.T], specs.Qf)

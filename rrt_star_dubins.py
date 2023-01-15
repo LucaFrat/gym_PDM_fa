@@ -41,8 +41,8 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=250,
-                 connect_circle_dist=50.0,
+                 max_iter=100,
+                 connect_circle_dist=500.0,
                  robot_radius=0.0,
                  ):
         """
@@ -64,8 +64,8 @@ class RRTStarDubins(RRTStar):
         self.obstacle_list = obstacle_list
         self.connect_circle_dist = connect_circle_dist
 
-        self.curvature = 1.0  # for dubins path
-        self.goal_yaw_th = np.deg2rad(1.0)
+        self.curvature = 0.15  # for dubins path
+        self.goal_yaw_th = np.deg2rad(60.0)
         self.goal_xy_th = 0.5
         self.robot_radius = robot_radius
 
@@ -225,11 +225,11 @@ def main():
     obstacleList = environ(show_animation=False)
 
     # Set Initial parameters
-    start = [6.0, 0.0, np.deg2rad(0.0)]
-    goal = [-12.0, 8.0, np.deg2rad(0.0)]
+    start = [-20.0, -25.0, np.deg2rad(0.0)]
+    goal = [30.0, 29.0, np.deg2rad(0.0)]
 
     rrtstar_dubins = RRTStarDubins(
-        start, goal, rand_area=[-36.0, 36.0], obstacle_list=obstacleList)
+        start, goal, rand_area=[-38.0, 38.0], obstacle_list=obstacleList)
     path = rrtstar_dubins.planning(animation=show_animation)
     # print(path)
 
@@ -238,15 +238,17 @@ def main():
 
     y = y[np.diff(np.hstack((x, np.inf))) != 0]
     x = x[np.diff(np.hstack((x, np.inf))) != 0]
+    x = x[np.diff(np.hstack((y, np.inf))) != 0]
+    y = y[np.diff(np.hstack((y, np.inf))) != 0]
 
     # Draw final path
-    if show_animation:  # pragma: no cover
-        rrtstar_dubins.draw_graph()
-        plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
-        plt.grid(True)
-        plt.pause(0.001)
-
-        plt.show()
+    # if show_animation:  # pragma: no cover
+    #     rrtstar_dubins.draw_graph()
+    #     plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
+    #     plt.grid(True)
+    #     plt.pause(0.001)
+    #
+    #     plt.show()
 
     return x, y
 

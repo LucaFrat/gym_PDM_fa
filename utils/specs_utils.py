@@ -7,10 +7,10 @@ DT = 0.2  # [s] time tick
 T = int(2/DT)  # horizon length
 
 # mpc parameters
-R = np.diag([0.3, 0.01])  # input cost matrix
-Rd = np.diag([0.1, 0.002])  # input difference cost matrix
-Q = np.diag([0.2, 0.1, 0.1, 0.1])  # state cost matrix
-Qf = Q * 0  # state final matrix
+R = np.diag([0.5, 0.5])  # input cost matrix
+Rd = np.diag([0.2, 0.2])  # input difference cost matrix
+Q = np.diag([0.01, 0.01, 1, 0.1])  # state cost matrix
+Qf = Q  # state final matrix
 
 GOAL_DIS = 1.5  # goal distance
 STOP_SPEED = 0.5 / 3.6  # stop speed
