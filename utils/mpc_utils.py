@@ -5,50 +5,10 @@ import sys
 import cvxpy
 import numpy as np
 
+import utils.specs_utils as specs
+
 # TODO: might remove this
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
-
-
-NX = 4  # x = x, y, v, yaw
-NU = 2  # a = [accel, steer]
-
-DT = 0.2  # [s] time tick
-T = int(2/DT)  # horizon length
-
-# mpc parameters
-R = np.diag([0.3, 0.01])  # input cost matrix
-Rd = np.diag([0.1, 0.002])  # input difference cost matrix
-Q = np.diag([0.2, 0.1, 0.1, 0.1])  # state cost matrix
-Qf = Q * 0  # state final matrix
-
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 500.0  # max simulation time
-
-# iterative paramter
-MAX_ITER = 3  # Max iteration
-DU_TH = 0.1  # iteration finish param
-
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
-
-
-# Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.7  # [m]
-
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
-MAX_ACCEL = 1.0  # maximum accel [m/ss]
-
-show_animation = True
 
 
 class State:
@@ -65,26 +25,25 @@ class State:
 
 
 def get_linear_model_matrix(v, phi, delta):
-
-    A = np.zeros((NX, NX))
+    A = np.zeros((specs.NX, specs.NX))
     A[0, 0] = 1.0
     A[1, 1] = 1.0
     A[2, 2] = 1.0
     A[3, 3] = 1.0
-    A[0, 2] = DT * math.cos(phi)
-    A[0, 3] = - DT * v * math.sin(phi)
-    A[1, 2] = DT * math.sin(phi)
-    A[1, 3] = DT * v * math.cos(phi)
-    A[3, 2] = DT * math.tan(delta) / WB
+    A[0, 2] = specs.DT * math.cos(phi)
+    A[0, 3] = - specs.DT * v * math.sin(phi)
+    A[1, 2] = specs.DT * math.sin(phi)
+    A[1, 3] = specs.DT * v * math.cos(phi)
+    A[3, 2] = specs.DT * math.tan(delta) / specs.WB
 
-    B = np.zeros((NX, NU))
-    B[2, 0] = DT
-    B[3, 1] = DT * v / (WB * math.cos(delta) ** 2)
+    B = np.zeros((specs.NX, specs.NU))
+    B[2, 0] = specs.DT
+    B[3, 1] = specs.DT * v / (specs.WB * math.cos(delta) ** 2)
 
-    C = np.zeros(NX)
-    C[0] = DT * v * math.sin(phi) * phi
-    C[1] = - DT * v * math.cos(phi) * phi
-    C[3] = - DT * v * delta / (WB * math.cos(delta) ** 2)
+    C = np.zeros(specs.NX)
+    C[0] = specs.DT * v * math.sin(phi) * phi
+    C[1] = - specs.DT * v * math.cos(phi) * phi
+    C[3] = - specs.DT * v * delta / (specs.WB * math.cos(delta) ** 2)
 
     return A, B, C
 
@@ -92,20 +51,20 @@ def get_linear_model_matrix(v, phi, delta):
 def update_state(state, a, delta):
 
     # input check
-    if delta >= MAX_STEER:
-        delta = MAX_STEER
-    elif delta <= -MAX_STEER:
-        delta = -MAX_STEER
+    if delta >= specs.MAX_STEER:
+        delta = specs.MAX_STEER
+    elif delta <= -specs.MAX_STEER:
+        delta = -specs.MAX_STEER
 
-    state.x = state.x + state.v * math.cos(state.yaw) * DT
-    state.y = state.y + state.v * math.sin(state.yaw) * DT
-    state.yaw = state.yaw + state.v / WB * math.tan(delta) * DT
-    state.v = state.v + a * DT
+    state.x = state.x + state.v * math.cos(state.yaw) * specs.DT
+    state.y = state.y + state.v * math.sin(state.yaw) * specs.DT
+    state.yaw = state.yaw + state.v / specs.WB * math.tan(delta) * specs.DT
+    state.v = state.v + a * specs.DT
 
-    if state.v > MAX_SPEED:
-        state.v = MAX_SPEED
-    elif state.v < MIN_SPEED:
-        state.v = MIN_SPEED
+    if state.v > specs.MAX_SPEED:
+        state.v = specs.MAX_SPEED
+    elif state.v < specs.MIN_SPEED:
+        state.v = specs.MIN_SPEED
 
     return state
 
@@ -120,7 +79,7 @@ def predict_motion(x0, oa, od, xref):
         xbar[i, 0] = x0[i]
 
     state = State(x=x0[0], y=x0[1], yaw=x0[3], v=x0[2])
-    for (ai, di, i) in zip(oa, od, range(1, T + 1)):
+    for (ai, di, i) in zip(oa, od, range(1, specs.T + 1)):
         state = update_state(state, ai, di)
         xbar[0, i] = state.x
         xbar[1, i] = state.y
@@ -136,17 +95,17 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od, origin_obst):
     """
 
     if oa is None or od is None:
-        oa = [0.0] * T
-        od = [0.0] * T
+        oa = [0.0] * specs.T
+        od = [0.0] * specs.T
 
-    for i in range(MAX_ITER):
+    for i in range(specs.MAX_ITER):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
         oa, od, ox, oy, oyaw, ov = linear_mpc_control(
             xref, xbar, x0, dref, origin_obst)
 
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
-        if du <= DU_TH:
+        if du <= specs.DU_TH:
             break
     else:
         print("Iterative is max iter")
@@ -172,30 +131,30 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
                           (origin_obst[j][1]-xbar[1, i]), 1])
         m.append(m_obst)
 
-    x = cvxpy.Variable((NX, T + 1))
-    u = cvxpy.Variable((NU, T))
+    x = cvxpy.Variable((specs.NX, specs.T + 1))
+    u = cvxpy.Variable((specs.NU, specs.T))
 
     cost = 0.0
     constraints = []
 
-    for t in range(T):
-        cost += cvxpy.quad_form(u[:, t], R)
+    for t in range(specs.T):
+        cost += cvxpy.quad_form(u[:, t], specs.R)
 
         if t != 0:
-            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], specs.Q)
 
         A, B, C = get_linear_model_matrix(xbar[2, t], xbar[3, t], dref[0, t])
 
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
-        if t < T - 1:
+        if t < specs.T - 1:
             # penalize differences between successive inputs: high consumption
-            cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
+            cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], specs.Rd)
             constraints += [cvxpy.abs(u[1, t + 1] - u[1, t])
-                            <= MAX_DSTEER * DT]
+                            <= specs.MAX_DSTEER * specs.DT]
 
         for j in range(origin_obst.shape[0]):
-            if t < T - 4 \
+            if t < specs.T - 4 \
                 and (np.abs(origin_obst[j][1]-xbar[1, t+1]) <= 10
                      or np.abs(origin_obst[j][1]-xbar[1, t]) <= 10):
                 constraints += [np.sign(origin_obst[j][1]-xbar[1, t])
@@ -203,13 +162,13 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
                                 <= 0.00004]
 
     # normal error state cost, last horizon step
-    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+    cost += cvxpy.quad_form(xref[:, specs.T] - x[:, specs.T], specs.Qf)
 
     constraints += [x[:, 0] == x0]
-    constraints += [x[2, :] <= MAX_SPEED]
-    constraints += [x[2, :] >= MIN_SPEED]
-    constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [x[2, :] <= specs.MAX_SPEED]
+    constraints += [x[2, :] >= specs.MIN_SPEED]
+    constraints += [cvxpy.abs(u[0, :]) <= specs.MAX_ACCEL]
+    constraints += [cvxpy.abs(u[1, :]) <= specs.MAX_STEER]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -227,7 +186,7 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
         oa, odelta, ox, oy, oyaw, ov = None, None, None, None, None, None
 
     if oa is None or odelta is None:
-        oa = [0.0] * T
-        odelta = [0.0] * T
+        oa = [0.0] * specs.T
+        odelta = [0.0] * specs.T
 
     return oa, odelta, ox, oy, oyaw, ov

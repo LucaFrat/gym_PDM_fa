@@ -6,40 +6,9 @@ import cubic_spline_planner
 import numpy as np
 import rrt_star_dubins as rrt_star
 
+import utils.specs_utils as specs
+
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
-
-
-NX = 4  # x = x, y, v, yaw
-NU = 2  # a = [accel, steer]
-
-DT = 0.2  # [s] time tick
-T = int(2/DT)  # horizon length
-
-# mpc parameters
-R = np.diag([0.3, 0.01])  # input cost matrix
-Rd = np.diag([0.1, 0.002])  # input difference cost matrix
-Q = np.diag([0.2, 0.1, 0.1, 0.1])  # state cost matrix
-Qf = Q * 0  # state final matrix
-
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 500.0  # max simulation time
-
-# iterative paramter
-MAX_ITER = 3  # Max iteration
-DU_TH = 0.1  # iteration finish param
-
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
-
-
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
-MAX_ACCEL = 1.0  # maximum accel [m/ss]
-
-show_animation = True
 
 
 def pi_2_pi(angle):
@@ -58,8 +27,8 @@ def get_nparray_from_matrix(x):
 
 def calc_nearest_index(state, cx, cy, cyaw, pind):
 
-    dx = [state.x - icx for icx in cx[pind:(pind + N_IND_SEARCH)]]
-    dy = [state.y - icy for icy in cy[pind:(pind + N_IND_SEARCH)]]
+    dx = [state.x - icx for icx in cx[pind:(pind + specs.N_IND_SEARCH)]]
+    dy = [state.y - icy for icy in cy[pind:(pind + specs.N_IND_SEARCH)]]
 
     d = [idx ** 2 + idy ** 2 for (idx, idy) in zip(dx, dy)]
 
@@ -80,8 +49,8 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
 
 
 def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
-    xref = np.zeros((NX, T + 1))
-    dref = np.zeros((1, T + 1))
+    xref = np.zeros((specs.NX, specs.T + 1))
+    dref = np.zeros((1, specs.T + 1))
     ncourse = len(cx)
 
     ind, _ = calc_nearest_index(state, cx, cy, cyaw, pind)
@@ -97,8 +66,8 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
 
     travel = 0.0
 
-    for i in range(T + 1):
-        travel += abs(state.v) * DT
+    for i in range(specs.T + 1):
+        travel += abs(state.v) * specs.DT
         dind = int(round(travel / dl))
 
         if (ind + dind) < ncourse:

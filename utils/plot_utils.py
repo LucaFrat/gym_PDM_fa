@@ -5,42 +5,34 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
+import utils.specs_utils as specs
+
 # TODO: might remove this
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 
-# Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.7  # [m]
-
-
 def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):
-    outline = np.array([[-BACKTOWHEEL,
-                         (LENGTH - BACKTOWHEEL),
-                         (LENGTH - BACKTOWHEEL),
-                         -BACKTOWHEEL,
-                         -BACKTOWHEEL],
-                        [WIDTH / 2,
-                         WIDTH / 2,
-                         - WIDTH / 2,
-                         -WIDTH / 2,
-                         WIDTH / 2]])
+    outline = np.array([[-specs.BACKTOWHEEL,
+                         (specs.LENGTH - specs.BACKTOWHEEL),
+                         (specs.LENGTH - specs.BACKTOWHEEL),
+                         -specs.BACKTOWHEEL,
+                         -specs.BACKTOWHEEL],
+                        [specs.WIDTH / 2,
+                         specs.WIDTH / 2,
+                         -specs.WIDTH / 2,
+                         -specs.WIDTH / 2,
+                         specs.WIDTH / 2]])
 
-    fr_wheel = np.array([[WHEEL_LEN,
-                          -WHEEL_LEN,
-                          -WHEEL_LEN,
-                          WHEEL_LEN,
-                          WHEEL_LEN],
-                         [-WHEEL_WIDTH - TREAD,
-                          -WHEEL_WIDTH - TREAD,
-                          WHEEL_WIDTH - TREAD,
-                          WHEEL_WIDTH - TREAD,
-                          -WHEEL_WIDTH - TREAD]])
+    fr_wheel = np.array([[specs.WHEEL_LEN,
+                          -specs.WHEEL_LEN,
+                          -specs.WHEEL_LEN,
+                          specs.WHEEL_LEN,
+                          specs.WHEEL_LEN],
+                         [-specs.WHEEL_WIDTH - specs.TREAD,
+                          -specs.WHEEL_WIDTH - specs.TREAD,
+                          specs.WHEEL_WIDTH - specs.TREAD,
+                          specs.WHEEL_WIDTH - specs.TREAD,
+                          -specs.WHEEL_WIDTH - specs.TREAD]])
 
     rr_wheel = np.copy(fr_wheel)
 
@@ -56,8 +48,8 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):
 
     fr_wheel = (fr_wheel.T.dot(Rot2)).T
     fl_wheel = (fl_wheel.T.dot(Rot2)).T
-    fr_wheel[0, :] += WB
-    fl_wheel[0, :] += WB
+    fr_wheel[0, :] += specs.WB
+    fl_wheel[0, :] += specs.WB
 
     fr_wheel = (fr_wheel.T.dot(Rot1)).T
     fl_wheel = (fl_wheel.T.dot(Rot1)).T
