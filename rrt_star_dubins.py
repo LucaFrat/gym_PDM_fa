@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from DubinsPath import dubins_path_planner
+from environ_obstacles import environ
 from RRTStar.rrt_star import RRTStar
 from utils.plot import plot_arrow
-from environ_obstacles import environ
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))  # root dir
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
@@ -114,8 +114,9 @@ class RRTStarDubins(RRTStar):
         plt.clf()
 
         # for stopping simulation with the esc key.
-        plt.gcf().canvas.mpl_connect('key_release_event',
-                                     lambda event: [exit(0) if event.key == 'escape' else None])
+        plt.gcf().canvas.mpl_connect(
+            'key_release_event',
+            lambda event: [exit(0) if event.key == 'escape' else None])
         if rnd is not None:
             plt.plot(rnd.x, rnd.y, "^k")
 
