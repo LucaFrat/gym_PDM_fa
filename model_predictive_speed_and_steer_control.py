@@ -10,11 +10,14 @@ import pathlib
 import sys
 
 import cvxpy
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
 import cubic_spline_planner
 import rrt_star_dubins as rrt_star
+from environ_obstacles import environ
+
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
@@ -241,8 +244,8 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od, origin_obst):
     for i in range(MAX_ITER):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
-        oa, od, ox, oy, oyaw, ov = linear_mpc_control(
-            xref, xbar, x0, dref, origin_obst)
+        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref, origin_obst)
+
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
@@ -423,6 +426,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     cyaw = smooth_yaw(cyaw)
 
+    fig, ax = plt.subplots()
     while MAX_TIME >= time:
         xref, target_ind, dref = calc_ref_trajectory(
             state, cx, cy, cyaw, ck, sp, dl, target_ind)
@@ -431,8 +435,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         origin_obst = np.array([[10, 2.5]])
 
-        oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(
-            xref, x0, dref, oa, odelta, origin_obst)
+        oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(xref, x0, dref, oa, odelta, origin_obst)
 
         if odelta is not None:
             di, ai = odelta[0], oa[0]
@@ -453,31 +456,21 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             break
 
         if show_animation:  # pragma: no cover
-            plt.cla()
+
+            plt.clf()
             # for stopping simulation with the esc key.
             plt.gcf().canvas.mpl_connect('key_release_event',
                                          lambda event: [exit(0) if event.key == 'escape' else None])
             if ox is not None:
                 plt.plot(ox, oy, "xr", label="MPC")
 
+            obstacleList = environ(show_animation=False)
+            for obst in obstacleList:
+                ax.add_patch(mpl.patches.Circle((obst[0], obst[1]), radius=obst[2], fill=True))
+        
             for j in range(origin_obst.shape[0]):
                 plt.plot(origin_obst[j][0], origin_obst[j]
                          [1], marker='o', linewidth=7)
-
-            obstacleList = []
-
-            for mul in range(30):
-                obstacleList.append([mul/2, -2])
-                obstacleList.append([15, mul/2])
-                obstacleList.append([mul/2, 15])
-                if mul < 27:
-                    obstacleList.append([0, 2+mul/2])
-                if mul < 20:
-                    obstacleList.append([2.5, 2.5+mul/2])
-                    obstacleList.append([7.5, 2.5+mul/2])
-                    obstacleList.append([12.5, 2.5+mul/2])
-                for obst in obstacleList:
-                    plot_circle(*obst, size=0.5, color="-b")
 
             plt.plot(cx, cy, "-r", label="course")
             plt.plot(x, y, "ob", label="trajectory")
@@ -489,6 +482,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             plt.title("Time[s]:" + str(round(time, 2))
                       + ", speed[km/h]:" + str(round(state.v * 3.6, 2)))
             plt.pause(0.0001)
+            plt.cla()
 
     return t, x, y, yaw, v, d, a
 
@@ -523,7 +517,7 @@ def do_gym_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     x0 = [state.x, state.y, state.v, state.yaw]  # current state
 
-    obst = np.array([[-5, 0]])
+    obst = np.array([[2.0, 0.1]])
 
     oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(
         xref, x0, dref, oa, odelta, obst)
@@ -633,7 +627,6 @@ def main():
 
     if show_animation:  # pragma: no cover
         plt.close("all")
-        plt.subplots()
         plt.plot(cx, cy, "-r", label="spline")
         plt.plot(x, y, "-g", label="tracking")
         plt.grid(True)
