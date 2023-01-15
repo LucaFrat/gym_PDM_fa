@@ -426,7 +426,9 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     cyaw = smooth_yaw(cyaw)
 
-    fig, ax = plt.subplots()
+
+    obstacleList = environ()
+
     while MAX_TIME >= time:
         xref, target_ind, dref = calc_ref_trajectory(
             state, cx, cy, cyaw, ck, sp, dl, target_ind)
@@ -435,7 +437,8 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         origin_obst = np.array([[10, 2.5]])
 
-        oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(xref, x0, dref, oa, odelta, origin_obst)
+        oa, odelta, ox, oy, _, _ = iterative_linear_mpc_control(
+                xref, x0, dref, oa, odelta, origin_obst)
 
         if odelta is not None:
             di, ai = odelta[0], oa[0]
@@ -457,17 +460,16 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
         if show_animation:  # pragma: no cover
 
-            plt.clf()
+            plt.cla()
             # for stopping simulation with the esc key.
             plt.gcf().canvas.mpl_connect('key_release_event',
                                          lambda event: [exit(0) if event.key == 'escape' else None])
             if ox is not None:
                 plt.plot(ox, oy, "xr", label="MPC")
 
-            obstacleList = environ(show_animation=False)
             for obst in obstacleList:
-                ax.add_patch(mpl.patches.Circle((obst[0], obst[1]), radius=obst[2], fill=True))
-        
+                plot_circle(*obst)
+            
             for j in range(origin_obst.shape[0]):
                 plt.plot(origin_obst[j][0], origin_obst[j]
                          [1], marker='o', linewidth=7)
@@ -486,48 +488,6 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
 
     return t, x, y, yaw, v, d, a
 
-
-def do_gym_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
-    """
-    Simulation
-    cx: course x position list
-    cy: course y position list
-    cy: course yaw position list
-    ck: course curvature list
-    sp: speed profile
-    dl: course tick [m]
-    """
-
-    state = initial_state
-
-    # initial yaw compensation
-    if state.yaw - cyaw[0] >= math.pi:
-        state.yaw -= math.pi * 2.0
-    elif state.yaw - cyaw[0] <= -math.pi:
-        state.yaw += math.pi * 2.0
-
-    target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
-
-    odelta, oa = None, None
-
-    cyaw = smooth_yaw(cyaw)
-
-    xref, target_ind, dref = calc_ref_trajectory(
-        state, cx, cy, cyaw, ck, sp, dl, target_ind)
-
-    x0 = [state.x, state.y, state.v, state.yaw]  # current state
-
-    obst = np.array([[2.0, 0.1]])
-
-    oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(
-        xref, x0, dref, oa, odelta, obst)
-
-    if odelta is not None:
-        di, ai = odelta[0], oa[0]
-
-    state = update_state(state, ai, di)
-
-    return state.x, state.y, state.yaw, state.v, di, ai
 
 
 def plot_circle(x, y, size, color="-b"):
