@@ -14,7 +14,6 @@ The folder contains several files, but hereunder you can find the most important
 - utils/trajectory_utils.py
 - utils/specs_utils.py
 - utils/plot_utils.py
-- 
 
 The center file is the simulation.py that will launch the rest of the files to run the simulation. Among these files, it uses the utils/mpc_utils.py, which contains the Model Predictive Control implementation; and utils/trajectory_utils.py which contains the functions used to obtain a path from rrt_star_dubins.py and generate a trajectory. The file utils/specs_utils.py contains all the global variable definitions while the file utils/plot_utils.py contains utility functions for plotting the results.
 
