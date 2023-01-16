@@ -41,7 +41,7 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=100,
+                 max_iter=1000,
                  connect_circle_dist=500.0,
                  robot_radius=0.0,
                  ):

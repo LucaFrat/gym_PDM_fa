@@ -12,6 +12,9 @@ Rd = np.diag([0.2, 0.01])  # input difference cost matrix
 Q = np.diag([0.2, 0.2, 0.2, 0.1])  # state cost matrix
 Qf = Q  # state final matrix
 
+# dynamic obstacle avoidance
+AVOID_RADIUS = 3
+
 GOAL_DIS = 1.5  # goal distance
 STOP_SPEED = 0.5 / 3.6  # stop speed
 MAX_TIME = 500.0  # max simulation time

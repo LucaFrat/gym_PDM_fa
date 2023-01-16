@@ -138,8 +138,10 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
     for j in range(origin_obst.shape[0]):
         m_obst = []
         for i in range(xbar.shape[1]):
-            m_obst.append([(origin_obst[j][0]-xbar[0, i]) /
-                          (origin_obst[j][1]-xbar[1, i]), 1])
+            m_obst.append([
+                (origin_obst[j][0] - xbar[0, i]) /
+                (origin_obst[j][1] - xbar[1, i]),
+                1])
         m.append(m_obst)
 
     x = cvxpy.Variable((specs.NX, specs.T + 1))
@@ -171,12 +173,12 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
         for j in range(origin_obst.shape[0]):
             # for each dynamic obstacle, constraint future vehicle's position
             # to lie on the sub-plane not containing the obstacle
-            if t < specs.T - 4 \
-                and (np.abs(origin_obst[j][1]-xbar[1, t+1]) <= 10
-                     or np.abs(origin_obst[j][1]-xbar[1, t]) <= 10):
-                constraints += [np.sign(origin_obst[j][1]-xbar[1, t])
+            if (t < specs.T - 4
+                and (np.abs(origin_obst[j][1] - xbar[1, t+1]) <= 10   # if an obstacle is nearby...
+                     or np.abs(origin_obst[j][1] - xbar[1, t]) <= 10)):
+                constraints += [np.sign(origin_obst[j][1] - xbar[1, t])
                                 * (m[j][t] @ (x[:2, t+4] - origin_obst[j]))
-                                <= -3]
+                                <= -specs.AVOID_RADIUS]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, specs.T] - x[:, specs.T], specs.Qf)
