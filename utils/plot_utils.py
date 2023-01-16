@@ -7,7 +7,6 @@ import numpy as np
 
 import utils.specs_utils as specs
 
-# TODO: might remove this
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 

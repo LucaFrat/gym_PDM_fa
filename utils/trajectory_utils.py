@@ -12,6 +12,9 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 
 def pi_2_pi(angle):
+    """
+    Return corresponding angle value within -π ≤ θ ≤ π.
+    """
     while angle > math.pi:
         angle = angle - 2.0 * math.pi
 
@@ -21,12 +24,10 @@ def pi_2_pi(angle):
     return angle
 
 
-def get_nparray_from_matrix(x):
-    return np.array(x).flatten()
-
-
 def calc_nearest_index(state, cx, cy, cyaw, pind):
-
+    """
+    Return the nearest index to a state in a series of points (path).
+    """
     dx = [state.x - icx for icx in cx[pind:(pind + specs.N_IND_SEARCH)]]
     dy = [state.y - icy for icy in cy[pind:(pind + specs.N_IND_SEARCH)]]
 
@@ -49,6 +50,9 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
 
 
 def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
+    """
+    Generate a reference trajectory (sequence of states and inputs) from a path.
+    """
     xref = np.zeros((specs.NX, specs.T + 1))
     dref = np.zeros((1, specs.T + 1))
     ncourse = len(cx)
@@ -87,6 +91,10 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
 
 
 def calc_speed_profile(cx, cy, cyaw, target_speed):
+    """
+    Generate a sequence of velocities from a sequence of states
+    using a target velocity.
+    """
     speed_profile = [target_speed] * len(cx)
     direction = 1.0  # forward
 
@@ -115,6 +123,9 @@ def calc_speed_profile(cx, cy, cyaw, target_speed):
 
 
 def smooth_yaw(yaw):
+    """
+    Smoothen out sharp changes in yaw values.
+    """
     for i in range(len(yaw) - 1):
         dyaw = yaw[i + 1] - yaw[i]
 
@@ -130,6 +141,9 @@ def smooth_yaw(yaw):
 
 
 def get_rrt_course(dl):
+    """
+    Get a path generated using RRT*.
+    """
     ax, ay = rrt_star.main()
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
         ax, ay, ds=dl)

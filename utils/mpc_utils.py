@@ -7,13 +7,12 @@ import numpy as np
 
 import utils.specs_utils as specs
 
-# TODO: might remove this
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 
 class State:
     """
-    vehicle state class
+    Vehicle state class
     """
 
     def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
@@ -25,6 +24,10 @@ class State:
 
 
 def get_linear_model_matrix(v, phi, delta):
+    """
+    Definition of state matrices
+    """
+
     A = np.zeros((specs.NX, specs.NX))
     A[0, 0] = 1.0
     A[1, 1] = 1.0
@@ -49,6 +52,9 @@ def get_linear_model_matrix(v, phi, delta):
 
 
 def update_state(state, a, delta):
+    """
+    Get next state from current state and input values
+    """
 
     # input check
     if delta >= specs.MAX_STEER:
@@ -74,6 +80,11 @@ def get_nparray_from_matrix(x):
 
 
 def predict_motion(x0, oa, od, xref):
+    """
+    Return a sequence of future states, xbar, based on the current state, x0,
+    and intended inputs, oa and od.
+    """
+
     xbar = xref * 0.0
     for i, _ in enumerate(x0):
         xbar[i, 0] = x0[i]
@@ -138,36 +149,49 @@ def linear_mpc_control(xref, xbar, x0, dref, origin_obst):
     constraints = []
 
     for t in range(specs.T):
+        # penalize big input values
         cost += cvxpy.quad_form(u[:, t], specs.R)
 
         if t != 0:
+            # penalize deviation from rference state
             cost += cvxpy.quad_form(xref[:, t] - x[:, t], specs.Q)
 
         A, B, C = get_linear_model_matrix(xbar[2, t], xbar[3, t], dref[0, t])
 
+        # kinematic bicycle model constraint
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
         if t < specs.T - 1:
             # penalize differences between successive inputs: high consumption
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], specs.Rd)
+            # steering rate constraint
             constraints += [cvxpy.abs(u[1, t + 1] - u[1, t])
                             <= specs.MAX_DSTEER * specs.DT]
 
         for j in range(origin_obst.shape[0]):
-            if t < specs.T - 2 \
+            # for each dynamic obstacle, constraint future vehicle's position
+            # to lie on the sub-plane not containing the obstacle
+            if t < specs.T - 4 \
                 and (np.abs(origin_obst[j][1]-xbar[1, t+1]) <= 10
                      or np.abs(origin_obst[j][1]-xbar[1, t]) <= 10):
                 constraints += [np.sign(origin_obst[j][1]-xbar[1, t])
-                                * (m[j][t] @ (x[:2, t+2] - origin_obst[j]))
-                                <= 0.0000001]
+                                * (m[j][t] @ (x[:2, t+4] - origin_obst[j]))
+                                <= -3]
 
     # normal error state cost, last horizon step
     cost += cvxpy.quad_form(xref[:, specs.T] - x[:, specs.T], specs.Qf)
 
+    # initial state constraint
     constraints += [x[:, 0] == x0]
+
+    # velocity constraints
     constraints += [x[2, :] <= specs.MAX_SPEED]
     constraints += [x[2, :] >= specs.MIN_SPEED]
+
+    # acceleration constraint
     constraints += [cvxpy.abs(u[0, :]) <= specs.MAX_ACCEL]
+
+    # steering constraint
     constraints += [cvxpy.abs(u[1, :]) <= specs.MAX_STEER]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)

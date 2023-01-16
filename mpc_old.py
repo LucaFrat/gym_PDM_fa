@@ -1,8 +1,12 @@
 """
 
-Path tracking simulation with iterative linear model predictive control for speed and steer control
-
-author: Atsushi Sakai (@Atsushi_twi)
+Path planing and navigation using Model Predictive Control.
+This file contains the code of a failed attempt to implement a single
+MPC planner for navigating in an environment with dynamic obstacles.
+The discrete kinematic bicycle model's state coststs of:
+x = [x, y, yaw angle, steering angle]
+and the control commands:
+u = [forward velocity, yaw rate]
 
 """
 import pathlib

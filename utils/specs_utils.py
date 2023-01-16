@@ -8,8 +8,8 @@ T = int(3.0/DT)  # horizon length
 
 # mpc parameters
 R = np.diag([1, 0.01])  # input cost matrix
-Rd = np.diag([0.3, 0.01])  # input difference cost matrix
-Q = np.diag([0.1, 0.1, 0.05, 0.1])  # state cost matrix
+Rd = np.diag([0.2, 0.01])  # input difference cost matrix
+Q = np.diag([0.2, 0.2, 0.2, 0.1])  # state cost matrix
 Qf = Q  # state final matrix
 
 GOAL_DIS = 1.5  # goal distance

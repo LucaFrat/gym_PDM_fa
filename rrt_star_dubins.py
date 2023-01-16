@@ -41,7 +41,7 @@ class RRTStarDubins(RRTStar):
 
     def __init__(self, start, goal, obstacle_list, rand_area,
                  goal_sample_rate=10,
-                 max_iter=500,
+                 max_iter=100,
                  connect_circle_dist=500.0,
                  robot_radius=0.0,
                  ):
@@ -78,7 +78,8 @@ class RRTStarDubins(RRTStar):
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
-            print("Iter:", i, ", number of nodes:", len(self.node_list))
+            print("Iter:", i, "/", self.max_iter,
+                  ", number of nodes:", len(self.node_list))
             rnd = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd)
@@ -207,7 +208,8 @@ class RRTStarDubins(RRTStar):
         return None
 
     def generate_final_course(self, goal_index):
-        print("final")
+        print("RRT* finished.")
+        print("Please close the window manually to continue.")
         path = [[self.end.x, self.end.y]]
         node = self.node_list[goal_index]
         while node.parent:
@@ -233,9 +235,11 @@ def main():
     path = rrtstar_dubins.planning(animation=show_animation)
     # print(path)
 
+    # remove double points at beginning and end, and reverse order
     x = np.flip(np.array(path)[1:-1, 0])
     y = np.flip(np.array(path)[1:-1, 1])
 
+    # filter out double sequential points
     y = y[np.diff(np.hstack((x, np.inf))) != 0]
     x = x[np.diff(np.hstack((x, np.inf))) != 0]
     x = x[np.diff(np.hstack((y, np.inf))) != 0]
@@ -250,6 +254,7 @@ def main():
     #
         plt.show()
 
+    print("Launching MPC...")
     return x, y
 
 
